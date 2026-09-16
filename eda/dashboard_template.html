@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pulso TransMi · Dashboard exploratorio</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<style>
+:root{--ink:#17212f;--muted:#5e7086;--blue:#2563eb;--orange:#e86b21;--line:#dbe5f0;--bg:#f4f7fb;--card:#fff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+header{background:#10253e;color:#fff;padding:30px max(22px,calc((100vw - 1280px)/2)) 28px}header .eyebrow{color:#88c4ff;text-transform:uppercase;letter-spacing:.12em;font-size:12px;font-weight:700}h1{font-size:clamp(27px,3vw,40px);line-height:1.1;margin:8px 0}header p{max-width:850px;color:#d1e2f5;margin:6px 0}
+main{max-width:1280px;margin:auto;padding:26px 22px 50px}.controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}.controls label{font-weight:700}select{background:#fff;color:var(--ink);border:1px solid #aabbd0;border-radius:9px;padding:10px 12px;font:inherit;min-width:290px}.scope{color:var(--muted);font-size:13px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}.kpi,.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 2px 8px #10253e08}.kpi{padding:17px 20px}.kpi .label{color:var(--muted);font-size:13px}.kpi strong{display:block;font-size:28px;line-height:1.25;margin:4px 0}.kpi .detail{font-size:12px;color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.panel{padding:21px;min-width:0}.wide{grid-column:1/-1}.panel h2{font-size:19px;margin:0 0 3px}.panel p{color:var(--muted);font-size:13px;margin:0 0 12px}.chart{width:100%;overflow-x:auto}.chart svg{display:block;width:100%;min-width:490px;height:auto}.legend{display:flex;gap:18px;margin:0 0 4px 12px;font-size:13px;color:var(--muted)}.legend span:before{content:"";display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:6px;background:var(--blue)}.legend .weekend:before{background:var(--orange)}.map-shell{height:470px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#e8f0f5}.map-shell .leaflet-container{font:inherit}.map-legend{display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin:10px 0 0}.map-dot{width:15px;height:15px;border-radius:50%;background:#2563eb;border:2px solid #fff;box-shadow:0 0 0 1px #2563eb}.map-selection{font-weight:700;color:var(--ink)}.map-attribution{font-size:11px}.note{margin-top:18px;color:var(--muted);font-size:13px}.note a{color:var(--blue)}
+@media(max-width:850px){.kpis{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.wide{grid-column:auto}}@media(max-width:540px){.kpis{grid-template-columns:1fr 1fr}.kpi strong{font-size:23px}select{width:100%}}
+</style>
+</head>
+<body>
+<header><div class="eyebrow">Pulso TransMi · EDA</div><h1>Demanda por estación e intervalo</h1><p>Explora 51.840 observaciones sintéticas de 12 estaciones. Cada valor de demanda representa pasajeros en un intervalo de 15 minutos; los promedios conservan esa unidad.</p></header>
+<main>
+<div class="controls"><label for="station">Estación</label><select id="station"><option value="all">Todas las estaciones</option></select><span class="scope" id="scope"></span></div>
+<div class="kpis"><div class="kpi"><div class="label">Registros de demanda</div><strong id="kpi-n"></strong><div class="detail">Intervalos × estaciones seleccionadas</div></div><div class="kpi"><div class="label">Demanda media</div><strong id="kpi-mean"></strong><div class="detail">Pasajeros por estación cada 15 min</div></div><div class="kpi"><div class="label">Mediana</div><strong id="kpi-median"></strong><div class="detail">Pasajeros cada 15 min</div></div><div class="kpi"><div class="label">Máximo observado</div><strong id="kpi-max"></strong><div class="detail">Pasajeros en un intervalo</div></div></div>
+<div class="grid">
+<section class="panel wide"><h2>Mapa de las 12 estaciones</h2><p>Haz clic en un círculo para filtrar todos los gráficos por esa estación. El tamaño del círculo representa su demanda media por intervalo de 15 minutos. Puedes arrastrar el mapa y cambiar el zoom.</p><div id="station-map" class="map-shell" aria-label="Mapa interactivo de estaciones de TransMilenio en Bogotá"></div><div class="map-legend"><span class="map-dot"></span><span>Círculo más grande = mayor demanda media</span><span class="map-selection" id="map-selection">Vista de todas las estaciones</span><span>El fondo cartográfico requiere conexión a internet.</span></div></section>
+<section class="panel wide"><h2>¿A qué horas aumenta la demanda?</h2><p>Eje X: hora local de Bogotá (0–23). Eje Y: promedio de pasajeros por estación en cada intervalo de 15 minutos. Cada punto resume cuatro intervalos por hora.</p><div class="legend"><span>Laborables (lunes–viernes)</span><span class="weekend">Fin de semana</span></div><div class="chart" id="hourly"></div></section>
+<section class="panel"><h2>¿Cómo cambia durante la semana?</h2><p>Eje X: día de la semana. Eje Y: promedio de pasajeros por estación e intervalo de 15 minutos.</p><div class="chart" id="weekday"></div></section>
+<section class="panel"><h2>¿Cuántos registros hay por nivel de demanda?</h2><p>Eje X: rango de pasajeros en un intervalo. Eje Y: número de registros en ese rango. Los intervalos de la escala tienen amplitudes distintas.</p><div class="chart" id="histogram"></div></section>
+<section class="panel wide"><h2>¿Cómo evoluciona a lo largo de los 45 días?</h2><p>Eje X: fecha local. Eje Y: promedio diario de pasajeros por estación e intervalo de 15 minutos. Los valles recurrentes corresponden principalmente a fines de semana.</p><div class="chart" id="daily"></div></section>
+<section class="panel wide"><h2>Comparación entre estaciones</h2><p>Eje X: promedio de pasajeros por intervalo de 15 minutos. Eje Y: estación. Este gráfico siempre muestra las 12 estaciones.</p><div class="chart" id="stations"></div></section>
+</div>
+<p class="note">Datos: <a href="snapshot/observations.csv">observations.csv</a> y <a href="snapshot/stations.csv">stations.csv</a>. El snapshot cubre <span id="range"></span>. No hay valores vacíos, intervalos ausentes ni claves estación–hora duplicadas. Lee el <a href="README.md">informe EDA</a> para controles de calidad, contexto y limitaciones. Usa <code>python3 eda/build_dashboard.py</code> para regenerar este archivo a partir del snapshot.</p>
+</main>
+<script src="vendor/leaflet/leaflet.js"></script>
+<script>
+const DATA=__EDA_DATA__;
+const $=id=>document.getElementById(id);
+const fmt=n=>new Intl.NumberFormat('es-CO',{maximumFractionDigits:1}).format(n);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const W=900,H=350,M={l:78,r:22,t:22,b:70};
+function svgStart(h=H){return `<svg viewBox="0 0 ${W} ${h}" xmlns="http://www.w3.org/2000/svg" role="img">`}
+function txt(x,y,s,size=12,anchor='middle',extra=''){return `<text x="${x}" y="${y}" text-anchor="${anchor}" font-family="system-ui,sans-serif" font-size="${size}" fill="#506276" ${extra}>${esc(s)}</text>`}
+function axis(maxY,xLabel,yLabel,labels,options={}){
+ const h=options.height||H,p={...M,...options.margin},pw=W-p.l-p.r,ph=h-p.t-p.b;
+ let out=`<line x1="${p.l}" y1="${p.t+ph}" x2="${p.l+pw}" y2="${p.t+ph}" stroke="#8898a9"/>`;
+ for(let i=0;i<=4;i++){let y=p.t+ph-i*ph/4;out+=`<line x1="${p.l}" y1="${y}" x2="${p.l+pw}" y2="${y}" stroke="#e0e7ef"/>`+txt(p.l-11,y+4,fmt(maxY*i/4),12,'end')}
+ if(!options.skipLabels)labels.forEach((label,i)=>{if(labels.length<=25||i%5===0)out+=txt(p.l+i*pw/Math.max(1,labels.length-1),p.t+ph+21,label)});
+ out+=txt(p.l+pw/2,h-12,xLabel,13)+txt(16,p.t+ph/2,yLabel,13,'middle',`transform="rotate(-90 16 ${p.t+ph/2})"`);
+ return {out,p,pw,ph,h};
+}
+function lineChart(id,labels,series,xLabel,yLabel){
+ const max=Math.max(...series.flatMap(s=>s.values.filter(v=>v!==null)));const maxY=Math.ceil(max*1.12/50)*50;
+ let {out,p,pw,ph}=axis(maxY,xLabel,yLabel,labels);out=svgStart()+out;
+ series.forEach(s=>{let points=s.values.map((v,i)=>`${p.l+i*pw/(labels.length-1)},${p.t+ph-v/maxY*ph}`).join(' ');out+=`<polyline points="${points}" fill="none" stroke="${s.color}" stroke-width="3" stroke-linejoin="round"/>`;
+ s.values.forEach((v,i)=>{const x=p.l+i*pw/(labels.length-1),y=p.t+ph-v/maxY*ph;out+=`<circle cx="${x}" cy="${y}" r="${labels.length>30?3:4}" fill="${s.color}"><title>${esc(s.name)} · ${esc(labels[i])}: ${fmt(v)} pasajeros por intervalo</title></circle>`})});
+ $(id).innerHTML=out+'</svg>';
+}
+function barChart(id,labels,values,xLabel,yLabel){
+ const max=Math.max(...values),maxY=Math.ceil(max*1.12/(max>1000?1000:50))*(max>1000?1000:50);
+ let {out,p,pw,ph}=axis(maxY,xLabel,yLabel,labels,{skipLabels:true});out=svgStart()+out;const step=pw/labels.length;
+ labels.forEach((label,i)=>out+=txt(p.l+(i+.5)*step,p.t+ph+21,label,11));
+ values.forEach((v,i)=>{const x=p.l+i*step+step*.16,y=p.t+ph-v/maxY*ph;out+=`<rect x="${x}" y="${y}" width="${step*.68}" height="${v/maxY*ph}" rx="3" fill="#2563eb"><title>${esc(labels[i])}: ${fmt(v)} ${yLabel.toLowerCase()}</title></rect>`});
+ $(id).innerHTML=out+'</svg>';
+}
+function stationChart(){
+ const rows=DATA.station_means, h=475,p={l:275,r:105,t:25,b:58},pw=W-p.l-p.r,step=30,maxY=800;
+ let out=svgStart(h);
+ for(let i=0;i<=4;i++){let x=p.l+i*pw/4;out+=`<line x1="${x}" y1="${p.t}" x2="${x}" y2="${p.t+rows.length*step}" stroke="#e0e7ef"/>`+txt(x,p.t+rows.length*step+20,fmt(i*maxY/4))}
+ rows.forEach(([id,v],i)=>{let y=p.t+i*step;out+=txt(p.l-10,y+19,DATA.names[id],12,'end')+`<rect x="${p.l}" y="${y+3}" width="${v/maxY*pw}" height="22" rx="3" fill="#2563eb"><title>${esc(DATA.names[id])}: ${fmt(v)} pasajeros por intervalo</title></rect>`+txt(p.l+v/maxY*pw+8,y+19,fmt(v),12,'start')});
+ out+=txt(p.l+pw/2,h-13,'Promedio de pasajeros por intervalo de 15 minutos',13);
+ $('stations').innerHTML=out+'</svg>';
+}
+for(const [id,name] of Object.entries(DATA.names).sort((a,b)=>a[1].localeCompare(b[1],'es'))){const o=document.createElement('option');o.value=id;o.textContent=name;$('station').append(o)}
+$('range').textContent=DATA.range[0].slice(0,10)+' a '+DATA.range[1].slice(0,10);
+stationChart();
+const map=L.map('station-map',{scrollWheelZoom:false}).setView([4.66,-74.095],11);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+ maxZoom:18,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
+}).addTo(map);
+const markers={};
+const bounds=[];
+for(const [id,geo] of Object.entries(DATA.geo)){
+ const avg=DATA.stats[id].mean;
+ const marker=L.circleMarker([geo.lat,geo.lon],{radius:7+avg/95,color:'#ffffff',weight:2,fillColor:'#2563eb',fillOpacity:.88}).addTo(map);
+ marker.bindPopup(`<strong>${esc(DATA.names[id])}</strong><br>Corredor: ${esc(geo.corridor)}<br>Demanda media: ${fmt(avg)} pasajeros / 15 min<br><small>Estación ${esc(id)} · seleccionada para los gráficos</small>`);
+ marker.on('click',()=>{$('station').value=id;render();});
+ markers[id]=marker;bounds.push([geo.lat,geo.lon]);
+}
+map.fitBounds(bounds,{padding:[35,35]});
+function render(){const id=$('station').value,s=DATA.stats[id],label=id==='all'?'Todas las estaciones':DATA.names[id];
+ $('scope').textContent=`${label} · ${fmt(s.n)} registros · 15 minutos por registro`;
+ $('map-selection').textContent=id==='all'?'Vista de todas las estaciones':`Seleccionada: ${label}`;
+ for(const [key,marker] of Object.entries(markers))marker.setStyle({fillColor:key===id?'#e86b21':'#2563eb',color:key===id?'#7c2d12':'#ffffff',weight:key===id?3:2});
+ $('kpi-n').textContent=fmt(s.n);$('kpi-mean').textContent=fmt(s.mean);$('kpi-median').textContent=fmt(s.median);$('kpi-max').textContent=fmt(s.max);
+ lineChart('hourly',Array.from({length:24},(_,i)=>String(i).padStart(2,'0')+':00'),[{name:'Laborables',values:s.hourly.laborable,color:'#2563eb'},{name:'Fin de semana',values:s.hourly.fin_semana,color:'#e86b21'}],'Hora local (Bogotá)','Pasajeros / 15 min');
+ barChart('weekday',['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'],s.weekday,'Día de la semana','Pasajeros / 15 min');
+ barChart('histogram',['0–99','100–199','200–399','400–599','600–999','1000–1499','1500–2499'],s.histogram,'Rango de pasajeros / 15 min','Número de registros');
+ lineChart('daily',s.daily.map(x=>x[0].slice(5)),[{name:'Media diaria',values:s.daily.map(x=>x[1]),color:'#0f766e'}],'Fecha (mes-día)','Pasajeros / 15 min');
+}
+$('station').addEventListener('change',()=>{const id=$('station').value;if(id==='all')map.fitBounds(bounds,{padding:[35,35]});else map.flyTo([DATA.geo[id].lat,DATA.geo[id].lon],13);render();});render();
+</script>
+</body>
+</html>

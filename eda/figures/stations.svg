@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 503" role="img" aria-label="Demanda media por estación">
+<style>text{font-family:Arial,sans-serif;fill:#17212f} .small{font-size:12px;fill:#475569} .title{font-size:19px;font-weight:bold}</style>
+<rect width="980" height="503" fill="white"/>
+<text x="30" y="34" class="title">Demanda media por estación</text>
+<text x="320.0" y="81.0" class="small" text-anchor="end">Calle 100 - Marketmedios</text>
+<rect x="330" y="64" width="226.9" height="22" fill="#2563eb" rx="3"/>
+<text x="563.9" y="80.0" class="small" text-anchor="start">294.0</text>
+<text x="320.0" y="115.0" class="small" text-anchor="end">Portal Suba</text>
+<rect x="330" y="98" width="199.5" height="22" fill="#2563eb" rx="3"/>
+<text x="536.5" y="114.0" class="small" text-anchor="start">258.4</text>
+<text x="320.0" y="149.0" class="small" text-anchor="end">Portal Américas</text>
+<rect x="330" y="132" width="264.0" height="22" fill="#2563eb" rx="3"/>
+<text x="601.0" y="148.0" class="small" text-anchor="start">342.1</text>
+<text x="320.0" y="183.0" class="small" text-anchor="end">Banderas</text>
+<rect x="330" y="166" width="456.3" height="22" fill="#2563eb" rx="3"/>
+<text x="793.3" y="182.0" class="small" text-anchor="start">591.1</text>
+<text x="320.0" y="217.0" class="small" text-anchor="end">Portal El Dorado – C.C. NUESTRO BOGOTÁ</text>
+<rect x="330" y="200" width="394.4" height="22" fill="#2563eb" rx="3"/>
+<text x="731.4" y="216.0" class="small" text-anchor="start">510.9</text>
+<text x="320.0" y="251.0" class="small" text-anchor="end">Universidades – CityU</text>
+<rect x="330" y="234" width="184.4" height="22" fill="#2563eb" rx="3"/>
+<text x="521.4" y="250.0" class="small" text-anchor="start">238.9</text>
+<text x="320.0" y="285.0" class="small" text-anchor="end">Movistar Arena</text>
+<rect x="330" y="268" width="210.4" height="22" fill="#2563eb" rx="3"/>
+<text x="547.4" y="284.0" class="small" text-anchor="start">272.6</text>
+<text x="320.0" y="319.0" class="small" text-anchor="end">Universidad Nacional</text>
+<rect x="330" y="302" width="216.9" height="22" fill="#2563eb" rx="3"/>
+<text x="553.9" y="318.0" class="small" text-anchor="start">281.0</text>
+<text x="320.0" y="353.0" class="small" text-anchor="end">Ricaurte - NQS</text>
+<rect x="330" y="336" width="527.8" height="22" fill="#2563eb" rx="3"/>
+<text x="864.8" y="352.0" class="small" text-anchor="start">683.7</text>
+<text x="320.0" y="387.0" class="small" text-anchor="end">Portal Usme</text>
+<rect x="330" y="370" width="168.2" height="22" fill="#2563eb" rx="3"/>
+<text x="505.2" y="386.0" class="small" text-anchor="start">217.9</text>
+<text x="320.0" y="421.0" class="small" text-anchor="end">Calle 72</text>
+<rect x="330" y="404" width="192.8" height="22" fill="#2563eb" rx="3"/>
+<text x="529.8" y="420.0" class="small" text-anchor="start">249.8</text>
+<text x="320.0" y="455.0" class="small" text-anchor="end">Museo Nacional</text>
+<rect x="330" y="438" width="260.8" height="22" fill="#2563eb" rx="3"/>
+<text x="597.8" y="454.0" class="small" text-anchor="start">337.9</text>
+</svg>

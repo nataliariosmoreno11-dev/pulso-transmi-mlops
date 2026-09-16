@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 440" role="img" aria-label="Perfil horario: laborables y fines de semana">
+<style>text{font-family:Arial,sans-serif;fill:#17212f} .small{font-size:12px;fill:#475569} .title{font-size:19px;font-weight:bold}</style>
+<rect width="1020" height="440" fill="white"/>
+<text x="30" y="34" class="title">Perfil horario: laborables y fines de semana</text>
+<line x1="75" y1="360.0" x2="960" y2="360.0" stroke="#dce4ed"/>
+<text x="67.0" y="364.0" class="small" text-anchor="end">0</text>
+<line x1="75" y1="288.8" x2="960" y2="288.8" stroke="#dce4ed"/>
+<text x="67.0" y="292.8" class="small" text-anchor="end">207</text>
+<line x1="75" y1="217.5" x2="960" y2="217.5" stroke="#dce4ed"/>
+<text x="67.0" y="221.5" class="small" text-anchor="end">414</text>
+<line x1="75" y1="146.2" x2="960" y2="146.2" stroke="#dce4ed"/>
+<text x="67.0" y="150.2" class="small" text-anchor="end">621</text>
+<line x1="75" y1="75.0" x2="960" y2="75.0" stroke="#dce4ed"/>
+<text x="67.0" y="79.0" class="small" text-anchor="end">827</text>
+<text x="75.0" y="380.0" class="small" text-anchor="middle">0</text>
+<text x="113.5" y="380.0" class="small" text-anchor="middle">1</text>
+<text x="152.0" y="380.0" class="small" text-anchor="middle">2</text>
+<text x="190.4" y="380.0" class="small" text-anchor="middle">3</text>
+<text x="228.9" y="380.0" class="small" text-anchor="middle">4</text>
+<text x="267.4" y="380.0" class="small" text-anchor="middle">5</text>
+<text x="305.9" y="380.0" class="small" text-anchor="middle">6</text>
+<text x="344.3" y="380.0" class="small" text-anchor="middle">7</text>
+<text x="382.8" y="380.0" class="small" text-anchor="middle">8</text>
+<text x="421.3" y="380.0" class="small" text-anchor="middle">9</text>
+<text x="459.8" y="380.0" class="small" text-anchor="middle">10</text>
+<text x="498.3" y="380.0" class="small" text-anchor="middle">11</text>
+<text x="536.7" y="380.0" class="small" text-anchor="middle">12</text>
+<text x="575.2" y="380.0" class="small" text-anchor="middle">13</text>
+<text x="613.7" y="380.0" class="small" text-anchor="middle">14</text>
+<text x="652.2" y="380.0" class="small" text-anchor="middle">15</text>
+<text x="690.7" y="380.0" class="small" text-anchor="middle">16</text>
+<text x="729.1" y="380.0" class="small" text-anchor="middle">17</text>
+<text x="767.6" y="380.0" class="small" text-anchor="middle">18</text>
+<text x="806.1" y="380.0" class="small" text-anchor="middle">19</text>
+<text x="844.6" y="380.0" class="small" text-anchor="middle">20</text>
+<text x="883.0" y="380.0" class="small" text-anchor="middle">21</text>
+<text x="921.5" y="380.0" class="small" text-anchor="middle">22</text>
+<text x="960.0" y="380.0" class="small" text-anchor="middle">23</text>
+<polyline points="75.0,305.2 113.5,308.7 152.0,309.2 190.4,305.2 228.9,281.1 267.4,215.7 305.9,132.1 344.3,108.5 382.8,158.3 421.3,223.7 459.8,259.9 498.3,266.9 536.7,264.2 575.2,264.2 613.7,260.1 652.2,229.0 690.7,160.5 729.1,100.9 767.6,106.4 806.1,167.0 844.6,224.0 883.0,261.2 921.5,284.2 960.0,298.7" fill="none" stroke="#2563eb" stroke-width="2.5"/>
+<line x1="75" y1="418" x2="99" y2="418" stroke="#2563eb" stroke-width="3"/>
+<text x="106.0" y="422.0" class="small" text-anchor="start">Laborable</text>
+<polyline points="75.0,314.7 113.5,319.8 152.0,320.8 190.4,317.5 228.9,298.5 267.4,247.4 305.9,183.5 344.3,171.4 382.8,214.4 421.3,264.5 459.8,286.7 498.3,290.4 536.7,287.9 575.2,287.3 613.7,283.7 652.2,259.1 690.7,207.6 729.1,161.9 767.6,161.6 806.1,197.8 844.6,238.2 883.0,268.3 921.5,291.4 960.0,305.6" fill="none" stroke="#ea580c" stroke-width="2.5"/>
+<line x1="285" y1="418" x2="309" y2="418" stroke="#ea580c" stroke-width="3"/>
+<text x="316.0" y="422.0" class="small" text-anchor="start">Fin de semana</text>
+<text x="9.0" y="59.0" class="small" text-anchor="start">Demanda media</text>
+</svg>

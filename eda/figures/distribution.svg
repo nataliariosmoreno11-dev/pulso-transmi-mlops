@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 430" role="img" aria-label="Distribución de la demanda (conteo de registros)">
+<style>text{font-family:Arial,sans-serif;fill:#17212f} .small{font-size:12px;fill:#475569} .title{font-size:19px;font-weight:bold}</style>
+<rect width="980" height="430" fill="white"/>
+<text x="30" y="34" class="title">Distribución de la demanda (conteo de registros)</text>
+<line x1="65" y1="355.0" x2="940" y2="355.0" stroke="#dce4ed"/>
+<text x="57.0" y="359.0" class="small" text-anchor="end">0</text>
+<line x1="65" y1="282.5" x2="940" y2="282.5" stroke="#dce4ed"/>
+<text x="57.0" y="286.5" class="small" text-anchor="end">4309</text>
+<line x1="65" y1="210.0" x2="940" y2="210.0" stroke="#dce4ed"/>
+<text x="57.0" y="214.0" class="small" text-anchor="end">8618</text>
+<line x1="65" y1="137.5" x2="940" y2="137.5" stroke="#dce4ed"/>
+<text x="57.0" y="141.5" class="small" text-anchor="end">12928</text>
+<line x1="65" y1="65.0" x2="940" y2="65.0" stroke="#dce4ed"/>
+<text x="57.0" y="69.0" class="small" text-anchor="end">17237</text>
+<rect x="81.2" y="208.1" width="92.5" height="146.9" fill="#2563eb" rx="2"/>
+<text x="127.5" y="374.0" class="small" text-anchor="middle">0–99</text>
+<rect x="206.2" y="155.5" width="92.5" height="199.5" fill="#2563eb" rx="2"/>
+<text x="252.5" y="374.0" class="small" text-anchor="middle">100–199</text>
+<rect x="331.2" y="91.4" width="92.5" height="263.6" fill="#2563eb" rx="2"/>
+<text x="377.5" y="374.0" class="small" text-anchor="middle">200–399</text>
+<rect x="456.2" y="242.8" width="92.5" height="112.2" fill="#2563eb" rx="2"/>
+<text x="502.5" y="374.0" class="small" text-anchor="middle">400–599</text>
+<rect x="581.2" y="256.5" width="92.5" height="98.5" fill="#2563eb" rx="2"/>
+<text x="627.5" y="374.0" class="small" text-anchor="middle">600–999</text>
+<rect x="706.2" y="311.6" width="92.5" height="43.4" fill="#2563eb" rx="2"/>
+<text x="752.5" y="374.0" class="small" text-anchor="middle">1000–1499</text>
+<rect x="831.2" y="346.9" width="92.5" height="8.1" fill="#2563eb" rx="2"/>
+<text x="877.5" y="374.0" class="small" text-anchor="middle">1500–2499</text>
+</svg>
