@@ -1,6 +1,6 @@
 # Migración a Supabase
 
-La migración [20260916150000_crear_esquema_pulso_transmi.sql](migrations/20260916150000_crear_esquema_pulso_transmi.sql) convierte el [modelo ER](../docs/proposed-data-model.md) en **10 tablas PostgreSQL** con claves, relaciones, validaciones e índices. No carga las 51.840 observaciones; crea únicamente el esquema.
+La migración [20260916150000_crear_esquema_pulso_transmi.sql](migrations/20260916150000_crear_esquema_pulso_transmi.sql) convierte el [modelo ER](../docs/proposed-data-model.md) en **10 tablas PostgreSQL** con claves, relaciones, validaciones e índices. No carga las 51.840 observaciones; crea únicamente el esquema. Para los datos se usa [load_api_data.py](load_api_data.py).
 
 ## Qué se comprobó
 
@@ -27,3 +27,15 @@ Si el proyecto remoto ya tiene tablas o migraciones propias, primero hay que rev
 La migración habilita **Row Level Security (RLS)** en las 10 tablas. Revoca acceso a `anon` y `authenticated` y concede operaciones al rol `service_role`, que debe usarse solo desde el servidor o GitHub Actions. El dashboard actual sigue leyendo el snapshot local; no necesita credenciales de Supabase en el navegador. Cuando se decida mostrar datos directamente desde Supabase, hará falta otra migración con políticas y permisos de solo lectura adecuados.
 
 La tabla `estado_ingesta` permite continuar descargas; `observaciones` usa la clave (`id_estacion`, `instante`) para admitir ingesta idempotente. El esquema no presupone los cuatro horizontes exactos ni el contrato definitivo de envíos, que aún no están publicados.
+
+## Cargar los datos de la API
+
+Después de aplicar la migración, configura la cadena de conexión PostgreSQL del proyecto en la variable `PULSO_DATABASE_URL` **en tu entorno local o en un secreto de CI** y ejecuta:
+
+```bash
+python3 supabase/load_api_data.py
+```
+
+El script requiere `psql` en `PATH`. Descarga los CSV actuales de estaciones, contexto y observaciones, comprueba sus SHA-256 frente a `/v1/meta`, consulta también `/v1/stream/observations` y carga todo dentro de una transacción. Usa `upsert` para que una segunda ejecución no duplique datos. No imprime la cadena de conexión ni guarda credenciales en archivos del repositorio.
+
+En la comprobación local del 18 de septiembre de 2026, la API ofreció 12 estaciones, 4.320 intervalos de contexto, 51.840 observaciones iniciales y **0 filas nuevas en el stream**. La carga se ejecutó dos veces en PostgreSQL temporal y mantuvo exactamente esos conteos. Cuando el stream libere datos, el mismo script incluirá esas filas en `observaciones`.
