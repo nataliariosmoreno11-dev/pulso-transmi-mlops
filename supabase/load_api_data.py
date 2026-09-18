@@ -1,7 +1,7 @@
 """Carga reproducible de la API Pulso TransMi a PostgreSQL/Supabase.
 
-Uso: PULSO_DATABASE_URL='postgresql://...' python3 supabase/load_api_data.py
-No imprime ni almacena la cadena de conexión. Requiere psql en PATH.
+Uso: poner PULSO_DATABASE_URL y PULSO_DB_PASSWORD en .env, luego ejecutar
+python3 supabase/load_api_data.py. No imprime la conexión. Requiere psql.
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import io
 import json
 import os
 import subprocess
-import sys
+from urllib.parse import quote, unquote, urlsplit, urlunsplit
 import tempfile
 import urllib.parse
 import urllib.request
@@ -140,23 +140,60 @@ commit;
 """
 
 
+def connection_url() -> str:
+    """Lee .env local y codifica la contraseña sin mostrarla."""
+    values = {}
+    env_file = Path(__file__).resolve().parents[1] / ".env"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            if "=" in line and not line.lstrip().startswith("#"):
+                key, value = line.split("=", 1)
+                values[key.strip()] = value
+    template = os.getenv("PULSO_DATABASE_URL") or values.get("PULSO_DATABASE_URL") or os.getenv("DATABASE_URL")
+    password = os.getenv("PULSO_DB_PASSWORD") or values.get("PULSO_DB_PASSWORD")
+    if not template:
+        raise SystemExit("Falta PULSO_DATABASE_URL en .env")
+    if password:
+        if template.count("[YOUR-PASSWORD]") == 1:
+            return template.replace("[YOUR-PASSWORD]", quote(password, safe=""))
+        # También acepta una URI completa; la contraseña separada tiene prioridad.
+        try:
+            parts = urlsplit(template)
+            if not (parts.username and parts.hostname and parts.port):
+                raise ValueError
+            netloc = f"{quote(parts.username, safe='.') }:{quote(password, safe='')}@{parts.hostname}:{parts.port}"
+            return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+        except ValueError:
+            raise SystemExit("La URI PostgreSQL de .env no tiene estructura válida") from None
+    if "[YOUR-PASSWORD]" in template:
+        raise SystemExit("Falta PULSO_DB_PASSWORD en .env")
+    return template
+
+
 def main() -> None:
-    database_url = os.getenv("PULSO_DATABASE_URL") or os.getenv("DATABASE_URL")
-    if not database_url:
-        raise SystemExit("Falta PULSO_DATABASE_URL o DATABASE_URL; no se conectó a PostgreSQL")
+    database_url = connection_url()
+    parts = urlsplit(database_url)
+    if not (parts.username and parts.password and parts.hostname and parts.port):
+        raise SystemExit("La URI PostgreSQL está incompleta")
+    safe_url = urlunsplit((
+        parts.scheme, f"{quote(parts.username, safe='.') }@{parts.hostname}:{parts.port}",
+        parts.path, parts.query, parts.fragment,
+    ))
+    process_env = os.environ.copy()
+    process_env["PGPASSWORD"] = unquote(parts.password)
+    process_env["PGSSLMODE"] = "require"
     with tempfile.TemporaryDirectory(prefix="pulso-ingest-") as temp:
         directory = Path(temp)
         counts = download_snapshot(directory)
         stream_count = download_stream(directory)
         print(f"API descargada y verificada: {counts}; stream={stream_count}")
         result = subprocess.run(
-            ["psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "--dbname", database_url],
+            ["psql", "-X", "-q", "-v", "ON_ERROR_STOP=1", "--dbname", safe_url],
             input=load_sql(directory), text=True, capture_output=True, check=False,
+            env=process_env,
         )
         if result.returncode:
-            # PostgreSQL error text may contain table/column names, never the URL argument.
-            sys.stderr.write(result.stderr)
-            raise SystemExit("Falló la transacción de carga; no se confirmó ningún cambio")
+            raise SystemExit("Falló la conexión o la transacción de carga; no se confirmó ningún cambio")
         print(result.stdout.strip())
 
 

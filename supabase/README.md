@@ -30,7 +30,14 @@ La tabla `estado_ingesta` permite continuar descargas; `observaciones` usa la cl
 
 ## Cargar los datos de la API
 
-Después de aplicar la migración, configura la cadena de conexión PostgreSQL del proyecto en la variable `PULSO_DATABASE_URL` **en tu entorno local o en un secreto de CI** y ejecuta:
+Después de aplicar la migración, crea `.env` en la raíz del repositorio (Git lo ignora) con la URI completa copiada de **Connect → Direct → Session pooler → URI**, conservando literalmente `[YOUR-PASSWORD]`, y la contraseña de la base de datos en otra línea:
+
+```text
+PULSO_DATABASE_URL=postgresql://usuario:[YOUR-PASSWORD]@servidor:5432/postgres
+PULSO_DB_PASSWORD=tu_contraseña_de_base_de_datos
+```
+
+El ejemplo muestra marcadores: pega la URI real que te da Supabase. El programa sustituye `[YOUR-PASSWORD]` y codifica los caracteres especiales de la contraseña. No compartas `.env` ni lo agregues a Git. Luego ejecuta:
 
 ```bash
 python3 supabase/load_api_data.py
