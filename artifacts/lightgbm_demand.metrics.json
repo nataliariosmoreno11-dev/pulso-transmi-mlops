@@ -54,5 +54,11 @@
     "30": 86.7671,
     "45": 86.6781,
     "60": 86.6313
+  },
+  "mlflow": {
+    "run_id": "ba5dc55946b84d62a2bb46e4d1efa23f",
+    "registered_model": "pulso-transmi-demand",
+    "model_version": "1",
+    "tracking_uri": "sqlite:////home/natalia/code/16-09/pulso-transmi-sdk/mlflow.db"
   }
 }

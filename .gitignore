@@ -9,3 +9,8 @@ build/
 artifacts/
 data/
 *.egg-info/
+
+# MLflow local: las ejecuciones compartidas requieren un tracking server
+mlflow.db
+mlflow.db-*
+mlruns/

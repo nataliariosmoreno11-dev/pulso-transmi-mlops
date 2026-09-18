@@ -1,14 +1,22 @@
-"""Entrena LightGBM con validación temporal para 15, 30, 45 y 60 minutos."""
+"""Entrena LightGBM y registra cada versión del experimento en MLflow."""
 import argparse
+import hashlib
 import json
+import os
+import subprocess
 from pathlib import Path
 
 import joblib
 import lightgbm as lgb
+import mlflow
+import mlflow.sklearn
 import numpy as np
 import pandas as pd
 
 FEATURES = ["station_id", "horizon_steps", "slot", "day_of_week", "is_weekend", "lag_available", "lag_15m", "lag_1h", "lag_2h", "lag_day", "lag_2days", "lag_week"]
+MODEL_NAME = "pulso-transmi-demand"
+EXPERIMENT_NAME = "pulso-transmi-demand"
+PARAMS = {"n_estimators": 300, "learning_rate": 0.05, "num_leaves": 31, "min_child_samples": 60, "random_state": 42, "n_jobs": 2, "verbosity": -1}
 
 
 def score(frame, prediction):
@@ -42,10 +50,17 @@ def make_features(observations):
     return pd.concat(chunks, ignore_index=True).dropna(subset=FEATURES)
 
 
+def git_commit():
+    result = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False)
+    return result.stdout.strip() if result.returncode == 0 else "unknown"
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, default=Path("eda/snapshot/observations.csv"))
     parser.add_argument("--output", type=Path, default=Path("artifacts/lightgbm_demand.joblib"))
+    parser.add_argument("--run-name", default=None, help="Nombre de esta versión del experimento")
+    parser.add_argument("--tracking-uri", default=os.getenv("MLFLOW_TRACKING_URI"), help="Servidor MLflow o URI de base de datos")
     args = parser.parse_args()
     raw = pd.read_csv(args.input, dtype={"station_id": "string"}, parse_dates=["observed_at"])
     if raw.duplicated(["station_id", "observed_at"]).any():
@@ -56,7 +71,7 @@ def main():
     cutoff = raw["observed_at"].max() - pd.Timedelta(days=7)
     train = frame.loc[frame["observed_at"] <= cutoff]
     valid = frame.loc[frame["observed_at"] > cutoff]
-    model = lgb.LGBMRegressor(n_estimators=300, learning_rate=0.05, num_leaves=31, min_child_samples=60, random_state=42, n_jobs=2, verbosity=-1)
+    model = lgb.LGBMRegressor(**PARAMS)
     model.fit(train[FEATURES], train["demand"])
     prediction = np.clip(model.predict(valid[FEATURES]), 0, None)
     metrics = {
@@ -67,9 +82,31 @@ def main():
         "lightgbm": score(valid, prediction), "previous_day_baseline": score(valid, valid["lag_day"].to_numpy()),
         "lightgbm_accuracy_by_horizon_minutes": {str(h * 15): score(valid.loc[valid["horizon_steps"] == h], prediction[valid["horizon_steps"].to_numpy() == h])["accuracy_mean_12_stations"] for h in range(1, 5)},
     }
+    data_hash = hashlib.sha256(args.input.read_bytes()).hexdigest()
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump({"model": model, "features": FEATURES, "metrics": metrics}, args.output)
-    args.output.with_suffix(".metrics.json").write_text(json.dumps(metrics, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if args.tracking_uri:
+        mlflow.set_tracking_uri(args.tracking_uri)
+    else:
+        mlflow.set_tracking_uri(f"sqlite:///{Path('mlflow.db').resolve()}")
+    mlflow.set_experiment(EXPERIMENT_NAME)
+    with mlflow.start_run(run_name=args.run_name) as run:
+        mlflow.log_params({**PARAMS, "source_sha256": data_hash, "train_through": metrics["train_through"], "validation_through": metrics["validation_through"], "observation_delay_minutes": 30})
+        mlflow.set_tags({"git_commit": git_commit(), "data_source": str(args.input), "model_family": "LightGBM"})
+        mlflow.log_metric("accuracy_mean_12_stations", metrics["lightgbm"]["accuracy_mean_12_stations"])
+        mlflow.log_metric("wape_global", metrics["lightgbm"]["wape_global"])
+        mlflow.log_metric("baseline_accuracy_mean_12_stations", metrics["previous_day_baseline"]["accuracy_mean_12_stations"])
+        mlflow.log_metric("baseline_wape_global", metrics["previous_day_baseline"]["wape_global"])
+        for station, value in metrics["lightgbm"]["accuracy_by_station"].items():
+            mlflow.log_metric(f"accuracy_station_{station}", value)
+        for minutes, value in metrics["lightgbm_accuracy_by_horizon_minutes"].items():
+            mlflow.log_metric(f"accuracy_horizon_{minutes}m", value)
+        model_info = mlflow.sklearn.log_model(sk_model=model, name="lightgbm_demand", registered_model_name=MODEL_NAME, serialization_format="cloudpickle")
+        metrics["mlflow"] = {"run_id": run.info.run_id, "registered_model": MODEL_NAME, "model_version": str(model_info.registered_model_version), "tracking_uri": mlflow.get_tracking_uri()}
+        joblib.dump({"model": model, "features": FEATURES, "metrics": metrics}, args.output)
+        report_path = args.output.with_suffix(".metrics.json")
+        report_path.write_text(json.dumps(metrics, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        mlflow.log_artifact(str(report_path), artifact_path="reports")
+        mlflow.log_artifact(str(args.output), artifact_path="joblib")
     print(json.dumps(metrics, ensure_ascii=False, indent=2))
 
 
