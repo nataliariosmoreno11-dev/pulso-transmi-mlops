@@ -1,0 +1,34 @@
+name: Sincronizar API con Supabase
+
+on:
+  workflow_dispatch:
+  # Activar schedule cuando el profesor publique la frecuencia de ejecución.
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pulso-supabase-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PULSO_DATABASE_URL: ${{ secrets.PULSO_DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Preparar cliente PostgreSQL
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+      - name: Comprobar secreto
+        run: test -n "$PULSO_DATABASE_URL"
+      - name: Descargar y cargar datos de la API
+        run: python3 supabase/load_api_data.py

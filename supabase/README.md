@@ -46,3 +46,9 @@ python3 supabase/load_api_data.py
 El script requiere `psql` en `PATH`. Descarga los CSV actuales de estaciones, contexto y observaciones, comprueba sus SHA-256 frente a `/v1/meta`, consulta también `/v1/stream/observations` y carga todo dentro de una transacción. Usa `upsert` para que una segunda ejecución no duplique datos. No imprime la cadena de conexión ni guarda credenciales en archivos del repositorio.
 
 En la comprobación local del 18 de septiembre de 2026, la API ofreció 12 estaciones, 4.320 intervalos de contexto, 51.840 observaciones iniciales y **0 filas nuevas en el stream**. La carga se ejecutó dos veces en PostgreSQL temporal y mantuvo exactamente esos conteos. Cuando el stream libere datos, el mismo script incluirá esas filas en `observaciones`.
+
+## Sincronizar desde GitHub Actions
+
+El workflow [sync-supabase.yml](../.github/workflows/sync-supabase.yml) permite ejecutar la carga manualmente desde **GitHub → Actions → Sincronizar API con Supabase → Run workflow**. La conexión se guarda como secreto del repositorio llamado `PULSO_DATABASE_URL`; el archivo `.env` local no se sube a GitHub.
+
+El workflow descarga y verifica los archivos actuales de la API, consulta el stream y hace `upsert` dentro de una transacción. Puede repetirse sin duplicar filas. El horario automático permanece desactivado hasta que el profesor publique la frecuencia de la competencia. Si se cambia la contraseña de PostgreSQL, hay que actualizar también el secreto `PULSO_DATABASE_URL` en GitHub.
