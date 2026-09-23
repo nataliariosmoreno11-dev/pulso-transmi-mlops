@@ -7,7 +7,7 @@ import joblib, numpy as np, pandas as pd, psycopg
 
 BASE=os.getenv("PULSO_API_URL","https://pulso-transmi.72-60-245-2.sslip.io").rstrip("/")
 MODEL_PATH=Path(os.getenv("PULSO_MODEL_PATH","artifacts/lightgbm_demand.joblib"))
-MODEL_VERSION=os.getenv("PULSO_MODEL_VERSION","lightgbm-demand:595220d")
+MODEL_VERSION=os.getenv("PULSO_MODEL_VERSION","lightgbm-demand:2.0")
 
 def load_env():
     p=Path(".env")
@@ -93,6 +93,8 @@ def build_features(history,cycle,names):
           "day_of_week":target_at.dayofweek,"is_weekend":int(target_at.dayofweek>=5),
           **{n:values[(station,t)] for n,t in times.items()},"target_at":target_at,"horizon_minutes":horizon})
     frame=pd.DataFrame(rows); frame["station_id"]=pd.Categorical(frame["station_id"],categories=stations)
+    for column, categories in (("horizon_steps", [1, 2, 3, 4]), ("slot", list(range(96))), ("day_of_week", list(range(7))), ("is_weekend", [0, 1])):
+        frame[column] = pd.Categorical(frame[column], categories=categories)
     if set(names)-set(frame): raise RuntimeError(f"Variables desconocidas: {sorted(set(names)-set(frame))}")
     return frame
 

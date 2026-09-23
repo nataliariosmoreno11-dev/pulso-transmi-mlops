@@ -15,7 +15,7 @@ jobs:
     env:
       PULSO_DATABASE_URL: ${{ secrets.PULSO_DATABASE_URL }}
       PULSO_API_KEY: ${{ secrets.PULSO_API_KEY }}
-      PULSO_MODEL_VERSION: lightgbm-demand:595220d
+      PULSO_MODEL_VERSION: lightgbm-demand:2.0
       PULSO_SKIP_SYNC: "1"
     steps:
       - uses: actions/checkout@v4

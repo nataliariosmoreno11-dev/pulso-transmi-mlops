@@ -53,10 +53,12 @@ def main():
     if raw[["observed_at", "station_id", "demand"]].isna().any().any():
         raise ValueError("Hay datos faltantes en columnas requeridas")
     frame = make_features(raw)
+    for column, categories in (("horizon_steps", [1, 2, 3, 4]), ("slot", list(range(96))), ("day_of_week", list(range(7))), ("is_weekend", [0, 1])):
+        frame[column] = pd.Categorical(frame[column], categories=categories)
     cutoff = raw["observed_at"].max() - pd.Timedelta(days=7)
     train = frame.loc[frame["observed_at"] <= cutoff]
     valid = frame.loc[frame["observed_at"] > cutoff]
-    model = lgb.LGBMRegressor(n_estimators=300, learning_rate=0.05, num_leaves=31, min_child_samples=60, random_state=42, n_jobs=2, verbosity=-1)
+    model = lgb.LGBMRegressor(n_estimators=600, learning_rate=0.03, num_leaves=127, min_child_samples=40, random_state=42, n_jobs=2, verbosity=-1)
     model.fit(train[FEATURES], train["demand"])
     prediction = np.clip(model.predict(valid[FEATURES]), 0, None)
     metrics = {

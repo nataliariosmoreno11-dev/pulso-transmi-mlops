@@ -14,7 +14,7 @@ jobs:
     timeout-minutes: 8
     env:
       PULSO_DATABASE_URL: ${{ secrets.PULSO_DATABASE_URL }}
-      PULSO_MODEL_VERSION: lightgbm-demand:595220d
+      PULSO_MODEL_VERSION: lightgbm-demand:2.0
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
