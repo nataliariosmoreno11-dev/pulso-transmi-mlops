@@ -1,0 +1,29 @@
+name: Pulso TransMi - predecir y entregar
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pulso-transmi-predict
+  cancel-in-progress: false
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      PULSO_DATABASE_URL: ${{ secrets.PULSO_DATABASE_URL }}
+      PULSO_API_KEY: ${{ secrets.PULSO_API_KEY }}
+      PULSO_MODEL_VERSION: lightgbm-demand:595220d
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e '.[competition]'
+      - name: Comprobar secretos
+        run: test -n "$PULSO_DATABASE_URL" && test -n "$PULSO_API_KEY"
+      - name: Sincronizar, predecir y entregar
+        run: python -m pulso_transmi.submit_current_cycle
