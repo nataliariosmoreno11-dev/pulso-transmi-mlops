@@ -64,7 +64,14 @@ def sync_stream(conn):
               [(r["station_id"],r["observed_at"],r["demand"]) for r in rows])
         conn.commit(); total+=len(rows)
         nxt=page.get("next_cursor")
-        if nxt is None: return total
+        if nxt is None:
+            with conn.cursor() as db:
+                db.execute("""insert into public.estado_ingesta(recurso,ultimo_instante,cursor,actualizado_en)
+                  select 'observations',max(instante),%s,now() from public.observaciones
+                  on conflict(recurso) do update set ultimo_instante=excluded.ultimo_instante,
+                  cursor=excluded.cursor,actualizado_en=excluded.actualizado_en""", (cursor,))
+            conn.commit()
+            return total
         if nxt==cursor: raise RuntimeError("Cursor repetido por la API")
         cursor=nxt
     raise RuntimeError("Stream demasiado extenso")
