@@ -64,14 +64,24 @@ def main() -> int:
         raise RuntimeError("No hay historia suficiente para la validación temporal")
 
     incumbent = joblib.load(args.model)
-    incumbent_prediction = incumbent["model"].predict(valid[incumbent["features"]])
-    incumbent_accuracy = accuracy(valid, incumbent_prediction)
-    results = [{"name": "incumbent", "accuracy": incumbent_accuracy, "promoted": False}]
-    trained: dict[str, lgb.LGBMRegressor] = {}
+    incumbent_name = incumbent.get("metrics", {}).get("tournament_winner", "l2_balanced")
+    known_parameters = dict(CANDIDATES)
+    incumbent_params = incumbent.get("metrics", {}).get("tournament_parameters") or known_parameters.get(incumbent_name)
+    if incumbent_params is None:
+        raise RuntimeError("El artefacto campeón no registra parámetros reproducibles")
 
     station_totals = train.groupby("station_id", observed=True).demand.sum()
     equal_station_weight = train.station_id.map(1 / station_totals).astype(float)
     equal_station_weight /= equal_station_weight.mean()
+
+    # El campeón también se reentrena solo con `train`; evaluar el artefacto final
+    # directamente filtraría datos que ya vio durante su ajuste con toda la historia.
+    incumbent_evaluation = lgb.LGBMRegressor(**incumbent_params, random_state=42, n_jobs=2, verbosity=-1)
+    incumbent_weights = equal_station_weight if incumbent_name == "l1_robust" else None
+    incumbent_evaluation.fit(train[FEATURES], train.demand, sample_weight=incumbent_weights)
+    incumbent_accuracy = accuracy(valid, incumbent_evaluation.predict(valid[FEATURES]))
+    results = [{"name": "incumbent:" + incumbent_name, "accuracy": incumbent_accuracy, "parameters": incumbent_params, "promoted": False}]
+    trained: dict[str, lgb.LGBMRegressor] = {}
 
     for name, params in CANDIDATES:
         model = lgb.LGBMRegressor(**params, random_state=42, n_jobs=2, verbosity=-1)
@@ -99,7 +109,7 @@ def main() -> int:
             "train_targets": int(len(train)), "validation_targets": int(len(valid)),
             "train_through": cutoff.isoformat(), "validation_through": raw.observed_at.max().isoformat(),
             "lightgbm": score(valid, np.clip(trained[winner_name].predict(valid[FEATURES]), 0, None)),
-            "tournament_winner": winner_name, "model_version": model_version,
+            "tournament_winner": winner_name, "tournament_parameters": winner_params, "model_version": model_version,
         }
         joblib.dump({"model": champion, "features": FEATURES, "metrics": metrics, "model_version": model_version}, args.model)
         args.model.with_suffix(".metrics.json").write_text(json.dumps(metrics, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
