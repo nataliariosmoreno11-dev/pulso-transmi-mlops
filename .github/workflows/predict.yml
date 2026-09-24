@@ -3,6 +3,12 @@ on:
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Validar el pipeline sin enviar a la API"
+        required: false
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -16,6 +22,7 @@ jobs:
       PULSO_DATABASE_URL: ${{ secrets.PULSO_DATABASE_URL }}
       PULSO_API_KEY: ${{ secrets.PULSO_API_KEY }}
       PULSO_MODEL_VERSION: lightgbm-demand:2.0
+      PULSO_DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
