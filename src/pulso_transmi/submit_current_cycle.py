@@ -122,14 +122,14 @@ def already_sent(conn,cycle_id):
         db.execute("select 1 from public.entregas_api where id_ciclo=%s and estado='accepted'",(cycle_id,))
         return db.fetchone() is not None
 
-def save(conn,cycle,predictions,receipt,run_id,key):
+def save(conn,cycle,predictions,receipt,run_id,key,model_version):
     with conn.transaction(),conn.cursor() as db:
         db.execute("""insert into public.entregas_api(id_ciclo,version_modelo,id_submission,id_ejecucion_cliente,clave_idempotencia,
           estado,intento,corte_datos,cierre_ciclo,predicciones_recibidas,predicciones_esperadas,hash_payload,recibo)
           values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
           on conflict(id_ciclo) do update set id_submission=excluded.id_submission,estado=excluded.estado,intento=excluded.intento,
           predicciones_recibidas=excluded.predicciones_recibidas,hash_payload=excluded.hash_payload,recibo=excluded.recibo,aceptada_en=now()""",
-          (cycle["cycle_id"],MODEL_VERSION,receipt["submission_id"],run_id,key,receipt["status"],receipt["attempt"],cycle["data_cutoff"],
+          (cycle["cycle_id"],model_version,receipt["submission_id"],run_id,key,receipt["status"],receipt["attempt"],cycle["data_cutoff"],
            receipt.get("closes_at") or cycle.get("closes_at"),receipt["predictions_received"],receipt["expected_predictions"],
            receipt.get("payload_hash"),json.dumps(receipt)))
         db.executemany("""insert into public.predicciones_api(id_ciclo,id_estacion,instante_objetivo,horizonte_minutos,demanda_predicha)
@@ -147,7 +147,7 @@ def main():
             print(f"Sin ciclo abierto; stream sincronizado ({synced} filas)."); return 0
         if already_sent(conn,cycle["cycle_id"]):
             print(f"Ciclo {cycle['cycle_id']} ya entregado; sin POST."); return 0
-        artifact=joblib.load(MODEL_PATH); history=load_history(conn,cycle["data_cutoff"])
+        artifact=joblib.load(MODEL_PATH); model_version=artifact.get("model_version", MODEL_VERSION); history=load_history(conn,cycle["data_cutoff"])
         frame=build_features(history,cycle,artifact["features"])
         output=np.clip(artifact["model"].predict(frame[artifact["features"]]),0,None)
         predictions=[{"station_id":str(r.station_id),"target_at":r.target_at.isoformat(),"horizon_minutes":int(r.horizon_minutes),"value":round(float(v),3)}
@@ -156,10 +156,10 @@ def main():
         api_predictions=[{k:p[k] for k in ("station_id","target_at","value")} for p in predictions]
         digest=hashlib.sha256(json.dumps(api_predictions,sort_keys=True,separators=(",",":")).encode()).hexdigest()
         run_id=f"gha-{cycle['cycle_id']}-{digest[:12]}"[-128:]
-        key="ptm-"+hashlib.sha256(f"{cycle['cycle_id']}:{MODEL_VERSION}:{digest}".encode()).hexdigest()
+        key="ptm-"+hashlib.sha256(f"{cycle['cycle_id']}:{model_version}:{digest}".encode()).hexdigest()
         trained_end=artifact.get("metrics",{}).get("validation_through")
         payload={"schema_version":"1.0","cycle_id":cycle["cycle_id"],"client_run_id":run_id,"data_cutoff":cycle["data_cutoff"],
-          "model":{"version":MODEL_VERSION,"training_data_end":trained_end,"git_commit":os.getenv("GITHUB_SHA","595220d")[:40]},
+          "model":{"version":model_version,"training_data_end":trained_end,"git_commit":os.getenv("GITHUB_SHA","595220d")[:40]},
           "predictions":api_predictions}
         payload["model"]={k:v for k,v in payload["model"].items() if v}
         if os.getenv("PULSO_DRY_RUN") == "1":
@@ -169,7 +169,7 @@ def main():
         _,receipt=api("/v1/submissions",payload,key)
         if receipt.get("status")!="accepted" or receipt.get("predictions_received")!=cycle["expected_predictions"]:
             raise RuntimeError(f"Recibo inesperado: {receipt}")
-        save(conn,cycle,predictions,receipt,run_id,key)
+        save(conn,cycle,predictions,receipt,run_id,key,model_version)
         print(f"Entrega aceptada: {receipt['submission_id']} ({receipt['predictions_received']}/{receipt['expected_predictions']}); {identity.get('display_name','identidad verificada')}.")
     return 0
 
