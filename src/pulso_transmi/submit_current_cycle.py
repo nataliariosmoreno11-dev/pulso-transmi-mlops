@@ -53,9 +53,13 @@ def api(path,payload=None,key=None):
     raise AssertionError
 
 def sync_stream(conn):
-    cursor=None; total=0
+    with conn.cursor() as db:
+        db.execute("select cursor from public.estado_ingesta where recurso='observations'")
+        state = db.fetchone()
+    cursor = state[0] if state else None
+    total=0
     for _ in range(1000):
-        path="/v1/stream/observations?limit=5000"+(f"&cursor={quote(cursor,safe='')}" if cursor else "")
+        path="/v1/stream/observations?limit=500"+(f"&cursor={quote(cursor,safe='')}" if cursor else "")
         _,page=api(path); rows=page.get("data",[])
         with conn.cursor() as db:
             db.executemany("""insert into public.observaciones(id_estacion,instante,demanda) values(%s,%s,%s)
