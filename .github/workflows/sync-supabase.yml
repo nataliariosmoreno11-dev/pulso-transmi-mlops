@@ -1,7 +1,7 @@
-name: 1 - Collector ETL a Supabase
+name: 1 - Collector ETL y respaldo de entrega
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "7,27,47 * * * *"
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,6 +15,7 @@ jobs:
     env:
       PULSO_DATABASE_URL: ${{ secrets.PULSO_DATABASE_URL }}
       PULSO_API_KEY: ${{ secrets.PULSO_API_KEY }}
+      PULSO_MODEL_VERSION: lightgbm-demand:2.0
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,3 +25,7 @@ jobs:
       - run: python -m pip install -e '.[competition]'
       - name: Ejecutar collector incremental
         run: python -m pulso_transmi.sync_observations
+      - name: Respaldo idempotente de predicción y entrega
+        env:
+          PULSO_SKIP_SYNC: "1"
+        run: python -m pulso_transmi.submit_current_cycle
