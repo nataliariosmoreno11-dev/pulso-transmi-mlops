@@ -15,6 +15,7 @@ jobs:
     env:
       PULSO_DATABASE_URL: ${{ secrets.PULSO_DATABASE_URL }}
       PULSO_MODEL_VERSION: lightgbm-demand:2.0
+      PULSO_TARGET_ACCURACY: "90"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
