@@ -40,6 +40,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add artifacts/lightgbm_demand.joblib artifacts/lightgbm_demand.metrics.json
+          git add -f artifacts/lightgbm_demand.joblib artifacts/lightgbm_demand.metrics.json
           git commit -m "Promote tournament model [skip ci]"
           git push
