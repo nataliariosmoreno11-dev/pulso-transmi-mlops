@@ -1,0 +1,31 @@
+name: 2 - Vigilar ciclos y entregar
+on:
+  schedule:
+    - cron: "19 */4 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pulso-transmi-cycle-watcher
+  cancel-in-progress: true
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      PULSO_DATABASE_URL: ${{ secrets.PULSO_DATABASE_URL }}
+      PULSO_API_KEY: ${{ secrets.PULSO_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e '.[competition]'
+      - name: Vigilar ciclos durante casi seis horas
+        run: |
+          for intento in $(seq 1 70); do
+            echo "Consulta ${intento}/70 - $(date -u +%FT%TZ)"
+            python -m pulso_transmi.submit_current_cycle || true
+            if [ "$intento" -lt 70 ]; then sleep 300; fi
+          done
