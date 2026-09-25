@@ -114,7 +114,7 @@ def weighted_median(values, weights):
     return float(ordered_values[np.searchsorted(np.cumsum(ordered_weights),ordered_weights.sum()/2)])
 
 def calibration_factors(conn,base_version,cutoff,minimum_rows=24):
-    versions=(base_version,base_version+"+station-cal-v1")
+    versions=(base_version,base_version+"-station-cal-v1")
     with conn.cursor() as db:
         db.execute("""select p.id_estacion,p.demanda_predicha,o.demanda from public.predicciones_api p
           join public.entregas_api e using(id_ciclo) join public.observaciones o
@@ -171,7 +171,7 @@ def main():
         factors=calibration_factors(conn,base_model_version,cycle["data_cutoff"])
         if factors:
             output=np.array([value*factors.get(str(station),1.0) for value,station in zip(output,frame["station_id"],strict=True)])
-            model_version=base_model_version+"+station-cal-v1"
+            model_version=base_model_version+"-station-cal-v1"
             print(f"Calibración aplicada a {len(factors)} estaciones.")
         else:
             model_version=base_model_version

@@ -27,7 +27,7 @@ jobs:
         run: |
           for intento in $(seq 1 66); do
             echo "Consulta ${intento}/66 - $(date -u +%FT%TZ)"
-            python -m pulso_transmi.submit_current_cycle || true
+            python -m pulso_transmi.submit_current_cycle
             if [ "$intento" -lt 66 ]; then sleep 300; fi
           done
       - name: Encadenar el siguiente vigilante
