@@ -1,6 +1,6 @@
 """Pipeline idempotente de sincronización, inferencia y submission."""
 from __future__ import annotations
-import hashlib, json, math, os, time, urllib.error, urllib.request
+import hashlib, json, math, os, re, time, urllib.error, urllib.request
 from pathlib import Path
 from urllib.parse import quote, urlsplit, urlunsplit
 import joblib, numpy as np, pandas as pd, psycopg
@@ -8,6 +8,12 @@ import joblib, numpy as np, pandas as pd, psycopg
 BASE=os.getenv("PULSO_API_URL","https://pulso-transmi.72-60-245-2.sslip.io").rstrip("/")
 MODEL_PATH=Path(os.getenv("PULSO_MODEL_PATH","artifacts/lightgbm_demand.joblib"))
 MODEL_VERSION=os.getenv("PULSO_MODEL_VERSION","lightgbm-demand:2.0")
+MODEL_VERSION_PATTERN=re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+
+def validate_model_version(version):
+    if not MODEL_VERSION_PATTERN.fullmatch(version):
+        raise ValueError(f"Versión de modelo incompatible con la API: {version!r}")
+    return version
 
 def load_env():
     p=Path(".env")
@@ -171,10 +177,10 @@ def main():
         factors=calibration_factors(conn,base_model_version,cycle["data_cutoff"])
         if factors:
             output=np.array([value*factors.get(str(station),1.0) for value,station in zip(output,frame["station_id"],strict=True)])
-            model_version=base_model_version+"-station-cal-v1"
+            model_version=validate_model_version(base_model_version+"-station-cal-v1")
             print(f"Calibración aplicada a {len(factors)} estaciones.")
         else:
-            model_version=base_model_version
+            model_version=validate_model_version(base_model_version)
         predictions=[{"station_id":str(r.station_id),"target_at":r.target_at.isoformat(),"horizon_minutes":int(r.horizon_minutes),"value":round(float(v),3)}
                      for r,v in zip(frame.itertuples(index=False),output,strict=True)]
         validate_predictions(cycle,predictions)

@@ -23,3 +23,11 @@ def test_validator_rejects_missing_target():
 def test_weighted_median_uses_prediction_as_wape_weight():
     from pulso_transmi.submit_current_cycle import weighted_median
     assert weighted_median([0.8, 1.0, 1.2], [1, 10, 1]) == 1.0
+
+
+def test_model_version_rejects_unsupported_characters():
+    import pytest
+    from pulso_transmi.submit_current_cycle import validate_model_version
+    assert validate_model_version("lightgbm-tournament:20260924T203613Z-station-cal-v1")
+    with pytest.raises(ValueError):
+        validate_model_version("modelo+calibrado")
