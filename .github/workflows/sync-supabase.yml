@@ -4,6 +4,7 @@ on:
     - cron: "7,27,47 * * * *"
   workflow_dispatch:
 permissions:
+  actions: write
   contents: read
 concurrency:
   group: pulso-transmi-collector
@@ -24,7 +25,13 @@ jobs:
           cache: pip
       - run: python -m pip install -e '.[competition]'
       - name: Ejecutar collector incremental
+        id: collector
         run: python -m pulso_transmi.sync_observations
+      - name: Reentrenar cuando lleguen datos nuevos
+        if: steps.collector.outputs.new_rows != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run retrain.yml --repo "${{ github.repository }}" --ref main
       - name: Respaldo idempotente de predicción y entrega
         env:
           PULSO_SKIP_SYNC: "1"

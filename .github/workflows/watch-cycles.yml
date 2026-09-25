@@ -27,6 +27,7 @@ jobs:
         run: |
           for intento in $(seq 1 66); do
             echo "Consulta ${intento}/66 - $(date -u +%FT%TZ)"
+            git pull --ff-only origin main
             python -m pulso_transmi.submit_current_cycle
             if [ "$intento" -lt 66 ]; then sleep 300; fi
           done
