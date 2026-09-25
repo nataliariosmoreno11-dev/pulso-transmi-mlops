@@ -12,7 +12,7 @@ def main():
     if github_output:
         with open(github_output, "a", encoding="utf-8") as output:
             output.write(f"new_rows={total}\n")
-    print(f"Collector finalizado: {total} filas recorridas; upsert sin duplicados.")
+    print(f"Collector finalizado: {total} filas nuevas o modificadas; upsert sin duplicados.")
     return 0
 
 if __name__=="__main__":

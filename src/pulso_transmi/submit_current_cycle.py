@@ -64,6 +64,7 @@ def sync_stream(conn):
         state = db.fetchone()
     cursor = state[0] if state else None
     total=0
+    changed=0
     for _ in range(1000):
         path="/v1/stream/observations?limit=500"+(f"&cursor={quote(cursor,safe='')}" if cursor else "")
         _,page=api(path); rows=page.get("data",[])
@@ -72,6 +73,7 @@ def sync_stream(conn):
               on conflict(id_estacion,instante) do update set demanda=excluded.demanda,recibido_en=now()
               where observaciones.demanda is distinct from excluded.demanda""",
               [(r["station_id"],r["observed_at"],r["demand"]) for r in rows])
+            changed += max(db.rowcount, 0)
         conn.commit(); total+=len(rows)
         nxt=page.get("next_cursor")
         if nxt is None:
@@ -81,7 +83,8 @@ def sync_stream(conn):
                   on conflict(recurso) do update set ultimo_instante=excluded.ultimo_instante,
                   cursor=excluded.cursor,actualizado_en=excluded.actualizado_en""", (cursor,))
             conn.commit()
-            return total
+            print(f"Stream: {total} filas recorridas; {changed} nuevas o modificadas.")
+            return changed
         if nxt==cursor: raise RuntimeError("Cursor repetido por la API")
         cursor=nxt
     raise RuntimeError("Stream demasiado extenso")
