@@ -18,3 +18,8 @@ def test_features_respect_available_history():
 def test_validator_rejects_missing_target():
     with pytest.raises(RuntimeError,match="no coinciden"):
         validate_predictions(cycle(),[])
+
+
+def test_weighted_median_uses_prediction_as_wape_weight():
+    from pulso_transmi.submit_current_cycle import weighted_median
+    assert weighted_median([0.8, 1.0, 1.2], [1, 10, 1]) == 1.0

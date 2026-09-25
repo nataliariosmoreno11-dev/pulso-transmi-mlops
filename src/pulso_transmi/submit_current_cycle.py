@@ -109,6 +109,24 @@ def build_features(history,cycle,names):
     if set(names)-set(frame): raise RuntimeError(f"Variables desconocidas: {sorted(set(names)-set(frame))}")
     return frame
 
+def weighted_median(values, weights):
+    order=np.argsort(values); ordered_values=np.asarray(values,dtype=float)[order]; ordered_weights=np.asarray(weights,dtype=float)[order]
+    return float(ordered_values[np.searchsorted(np.cumsum(ordered_weights),ordered_weights.sum()/2)])
+
+def calibration_factors(conn,base_version,cutoff,minimum_rows=24):
+    versions=(base_version,base_version+"+station-cal-v1")
+    with conn.cursor() as db:
+        db.execute("""select p.id_estacion,p.demanda_predicha,o.demanda from public.predicciones_api p
+          join public.entregas_api e using(id_ciclo) join public.observaciones o
+          on o.id_estacion=p.id_estacion and o.instante=p.instante_objetivo
+          where e.version_modelo=any(%s) and o.instante<=%s and p.demanda_predicha>0""",(list(versions),cutoff))
+        rows=db.fetchall()
+    grouped={}
+    for station,predicted,actual in rows:
+        grouped.setdefault(str(station),[]).append((float(actual)/float(predicted),float(predicted)))
+    return {station:float(np.clip(weighted_median([x[0] for x in data],[x[1] for x in data]),.8,1.2))
+            for station,data in grouped.items() if len(data)>=minimum_rows}
+
 def validate_predictions(cycle,predictions):
     expected={(str(t["station_id"]),pd.Timestamp(t["target_at"])) for t in cycle["targets"]}
     actual={(p["station_id"],pd.Timestamp(p["target_at"])) for p in predictions}
@@ -147,9 +165,16 @@ def main():
             print(f"Sin ciclo abierto; stream sincronizado ({synced} filas)."); return 0
         if already_sent(conn,cycle["cycle_id"]):
             print(f"Ciclo {cycle['cycle_id']} ya entregado; sin POST."); return 0
-        artifact=joblib.load(MODEL_PATH); model_version=artifact.get("model_version", MODEL_VERSION); history=load_history(conn,cycle["data_cutoff"])
+        artifact=joblib.load(MODEL_PATH); base_model_version=artifact.get("model_version", MODEL_VERSION); history=load_history(conn,cycle["data_cutoff"])
         frame=build_features(history,cycle,artifact["features"])
         output=np.clip(artifact["model"].predict(frame[artifact["features"]]),0,None)
+        factors=calibration_factors(conn,base_model_version,cycle["data_cutoff"])
+        if factors:
+            output=np.array([value*factors.get(str(station),1.0) for value,station in zip(output,frame["station_id"],strict=True)])
+            model_version=base_model_version+"+station-cal-v1"
+            print(f"Calibración aplicada a {len(factors)} estaciones.")
+        else:
+            model_version=base_model_version
         predictions=[{"station_id":str(r.station_id),"target_at":r.target_at.isoformat(),"horizon_minutes":int(r.horizon_minutes),"value":round(float(v),3)}
                      for r,v in zip(frame.itertuples(index=False),output,strict=True)]
         validate_predictions(cycle,predictions)
