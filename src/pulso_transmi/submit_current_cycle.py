@@ -136,6 +136,28 @@ def calibration_factors(conn,base_version,cutoff,minimum_rows=24):
     return {station:float(np.clip(weighted_median([x[0] for x in data],[x[1] for x in data]),.8,1.2))
             for station,data in grouped.items() if len(data)>=minimum_rows}
 
+def adaptive_fallback_stations(conn,base_version,cutoff,minimum_rows=12,minimum_improvement=5.0,lookback_rows=48):
+    versions=(base_version,base_version+"-station-cal-v1",base_version+"-station-cal-v1-adaptive-v1")
+    with conn.cursor() as db:
+        db.execute("""with evaluated as (
+          select p.id_estacion,p.demanda_predicha::float predicted,o.demanda::float actual,
+                 lag_o.demanda::float recent_lag,p.instante_objetivo,
+                 row_number() over(partition by p.id_estacion order by p.instante_objetivo desc) as rn
+          from public.predicciones_api p join public.entregas_api e using(id_ciclo)
+          join public.observaciones o on o.id_estacion=p.id_estacion and o.instante=p.instante_objetivo
+          join public.observaciones lag_o on lag_o.id_estacion=p.id_estacion
+            and lag_o.instante=p.instante_objetivo-make_interval(mins => p.horizonte_minutos+30)
+          where e.version_modelo=any(%s) and p.instante_objetivo<=%s)
+          select id_estacion,count(*),
+            100*(1-sum(abs(actual-predicted))/nullif(sum(actual),0)) model_accuracy,
+            100*(1-sum(abs(actual-recent_lag))/nullif(sum(actual),0)) lag_accuracy
+          from evaluated where rn<=%s group by id_estacion""",
+          (list(versions),cutoff,lookback_rows))
+        rows=db.fetchall()
+    return {str(station) for station,count,model_accuracy,lag_accuracy in rows
+            if count>=minimum_rows and lag_accuracy is not None and model_accuracy is not None
+            and float(lag_accuracy)>=float(model_accuracy)+minimum_improvement}
+
 def validate_predictions(cycle,predictions):
     expected={(str(t["station_id"]),pd.Timestamp(t["target_at"])) for t in cycle["targets"]}
     actual={(p["station_id"],pd.Timestamp(p["target_at"])) for p in predictions}
@@ -180,10 +202,17 @@ def main():
         factors=calibration_factors(conn,base_model_version,cycle["data_cutoff"])
         if factors:
             output=np.array([value*factors.get(str(station),1.0) for value,station in zip(output,frame["station_id"],strict=True)])
-            model_version=validate_model_version(base_model_version+"-station-cal-v1")
+            model_version=base_model_version+"-station-cal-v1"
             print(f"Calibración aplicada a {len(factors)} estaciones.")
         else:
-            model_version=validate_model_version(base_model_version)
+            model_version=base_model_version
+        fallback_stations=adaptive_fallback_stations(conn,base_model_version,cycle["data_cutoff"])
+        if fallback_stations:
+            output=np.array([float(recent) if str(station) in fallback_stations else value
+              for value,recent,station in zip(output,frame["lag_available"],frame["station_id"],strict=True)])
+            model_version += "-adaptive-v1"
+            print(f"Respaldo adaptativo aplicado a: {', '.join(sorted(fallback_stations))}.")
+        model_version=validate_model_version(model_version)
         predictions=[{"station_id":str(r.station_id),"target_at":r.target_at.isoformat(),"horizon_minutes":int(r.horizon_minutes),"value":round(float(v),3)}
                      for r,v in zip(frame.itertuples(index=False),output,strict=True)]
         validate_predictions(cycle,predictions)
