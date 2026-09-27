@@ -158,6 +158,23 @@ def adaptive_fallback_stations(conn,base_version,cutoff,minimum_rows=12,minimum_
             if count>=minimum_rows and lag_accuracy is not None and model_accuracy is not None
             and float(lag_accuracy)>=float(model_accuracy)+minimum_improvement}
 
+def recent_residual_factors(conn,cutoff,minimum_rows=12,lookback_rows=12):
+    with conn.cursor() as db:
+        db.execute("""with evaluated as (
+          select p.id_estacion,p.demanda_predicha::float predicted,o.demanda::float actual,
+                 row_number() over(partition by p.id_estacion order by p.instante_objetivo desc) as rn
+          from public.predicciones_api p join public.observaciones o
+          on o.id_estacion=p.id_estacion and o.instante=p.instante_objetivo
+          where p.instante_objetivo<=%s and p.demanda_predicha>0)
+          select id_estacion,predicted,actual from evaluated where rn<=%s""",
+          (cutoff,lookback_rows))
+        rows=db.fetchall()
+    grouped={}
+    for station,predicted,actual in rows:
+        grouped.setdefault(str(station),[]).append((float(actual)/float(predicted),float(predicted)))
+    return {station:float(np.clip(weighted_median([x[0] for x in data],[x[1] for x in data]),.8,1.2))
+            for station,data in grouped.items() if len(data)>=minimum_rows}
+
 def validate_predictions(cycle,predictions):
     expected={(str(t["station_id"]),pd.Timestamp(t["target_at"])) for t in cycle["targets"]}
     actual={(p["station_id"],pd.Timestamp(p["target_at"])) for p in predictions}
@@ -212,6 +229,12 @@ def main():
               for value,recent,station in zip(output,frame["lag_available"],frame["station_id"],strict=True)])
             model_version += "-adaptive-v1"
             print(f"Respaldo adaptativo aplicado a: {', '.join(sorted(fallback_stations))}.")
+        residual_factors=recent_residual_factors(conn,cycle["data_cutoff"])
+        if residual_factors:
+            output=np.array([value*residual_factors.get(str(station),1.0)
+              for value,station in zip(output,frame["station_id"],strict=True)])
+            model_version += "-residual-v1"
+            print(f"Corrección residual reciente aplicada a {len(residual_factors)} estaciones.")
         model_version=validate_model_version(model_version)
         predictions=[{"station_id":str(r.station_id),"target_at":r.target_at.isoformat(),"horizon_minutes":int(r.horizon_minutes),"value":round(float(v),3)}
                      for r,v in zip(frame.itertuples(index=False),output,strict=True)]
