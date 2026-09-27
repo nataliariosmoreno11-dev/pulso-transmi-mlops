@@ -199,7 +199,13 @@ def main():
     load_env()
     if not MODEL_PATH.exists(): raise RuntimeError(f"No existe el modelo: {MODEL_PATH}")
     with psycopg.connect(db_url()) as conn:
-        synced=0 if os.getenv("PULSO_SKIP_SYNC")=="1" else sync_stream(conn); status,cycle=api("/v1/forecast-cycles/current")
+        synced=0
+        if os.getenv("PULSO_SKIP_SYNC")!="1":
+            try:
+                synced=sync_stream(conn)
+            except RuntimeError as exc:
+                print(f"Advertencia: stream no disponible; se continúa con Supabase: {exc}")
+        status,cycle=api("/v1/forecast-cycles/current")
         if status==404:
             print(f"Sin ciclo abierto; stream sincronizado ({synced} filas)."); return 0
         if already_sent(conn,cycle["cycle_id"]):
