@@ -136,44 +136,36 @@ def calibration_factors(conn,base_version,cutoff,minimum_rows=24):
     return {station:float(np.clip(weighted_median([x[0] for x in data],[x[1] for x in data]),.8,1.2))
             for station,data in grouped.items() if len(data)>=minimum_rows}
 
-def adaptive_fallback_stations(conn,base_version,cutoff,minimum_rows=12,minimum_improvement=5.0,lookback_rows=48):
-    versions=(base_version,base_version+"-station-cal-v1",base_version+"-station-cal-v1-adaptive-v1")
+def recent_meta_adjustments(conn,cutoff,minimum_rows=8,lookback_rows=8,lag_advantage=8.0):
     with conn.cursor() as db:
         db.execute("""with evaluated as (
           select p.id_estacion,p.demanda_predicha::float predicted,o.demanda::float actual,
-                 lag_o.demanda::float recent_lag,p.instante_objetivo,
-                 row_number() over(partition by p.id_estacion order by p.instante_objetivo desc) as rn
-          from public.predicciones_api p join public.entregas_api e using(id_ciclo)
-          join public.observaciones o on o.id_estacion=p.id_estacion and o.instante=p.instante_objetivo
-          join public.observaciones lag_o on lag_o.id_estacion=p.id_estacion
-            and lag_o.instante=p.instante_objetivo-make_interval(mins => p.horizonte_minutos+30)
-          where e.version_modelo=any(%s) and p.instante_objetivo<=%s)
-          select id_estacion,count(*),
-            100*(1-sum(abs(actual-predicted))/nullif(sum(actual),0)) model_accuracy,
-            100*(1-sum(abs(actual-recent_lag))/nullif(sum(actual),0)) lag_accuracy
-          from evaluated where rn<=%s group by id_estacion""",
-          (list(versions),cutoff,lookback_rows))
-        rows=db.fetchall()
-    return {str(station) for station,count,model_accuracy,lag_accuracy in rows
-            if count>=minimum_rows and lag_accuracy is not None and model_accuracy is not None
-            and float(lag_accuracy)>=float(model_accuracy)+minimum_improvement}
-
-def recent_residual_factors(conn,cutoff,minimum_rows=12,lookback_rows=12):
-    with conn.cursor() as db:
-        db.execute("""with evaluated as (
-          select p.id_estacion,p.demanda_predicha::float predicted,o.demanda::float actual,
+                 lag_o.demanda::float recent_lag,
                  row_number() over(partition by p.id_estacion order by p.instante_objetivo desc) as rn
           from public.predicciones_api p join public.observaciones o
           on o.id_estacion=p.id_estacion and o.instante=p.instante_objetivo
+          join public.observaciones lag_o on lag_o.id_estacion=p.id_estacion
+            and lag_o.instante=p.instante_objetivo-make_interval(mins => p.horizonte_minutos+30)
           where p.instante_objetivo<=%s and p.demanda_predicha>0)
-          select id_estacion,predicted,actual from evaluated where rn<=%s""",
+          select id_estacion,predicted,actual,recent_lag from evaluated where rn<=%s""",
           (cutoff,lookback_rows))
         rows=db.fetchall()
     grouped={}
-    for station,predicted,actual in rows:
-        grouped.setdefault(str(station),[]).append((float(actual)/float(predicted),float(predicted)))
-    return {station:float(np.clip(weighted_median([x[0] for x in data],[x[1] for x in data]),.8,1.2))
-            for station,data in grouped.items() if len(data)>=minimum_rows}
+    for station,predicted,actual,recent_lag in rows:
+        grouped.setdefault(str(station),[]).append((float(actual),float(predicted),float(recent_lag)))
+    adjustments={}
+    for station,data in grouped.items():
+        if len(data)<minimum_rows: continue
+        actual_total=sum(x[0] for x in data)
+        if actual_total<=0: continue
+        model_accuracy=100*(1-sum(abs(x[0]-x[1]) for x in data)/actual_total)
+        lag_accuracy=100*(1-sum(abs(x[0]-x[2]) for x in data)/actual_total)
+        use_lag=lag_accuracy>=model_accuracy+lag_advantage
+        bases=[x[2] if use_lag else x[1] for x in data]
+        valid=[(x[0]/base,base) for x,base in zip(data,bases,strict=True) if base>0]
+        factor=1.0 if not valid else float(np.clip(weighted_median([x[0] for x in valid],[x[1] for x in valid]),.8,1.2))
+        adjustments[station]=(use_lag,factor)
+    return adjustments
 
 def validate_predictions(cycle,predictions):
     expected={(str(t["station_id"]),pd.Timestamp(t["target_at"])) for t in cycle["targets"]}
@@ -223,18 +215,15 @@ def main():
             print(f"Calibración aplicada a {len(factors)} estaciones.")
         else:
             model_version=base_model_version
-        fallback_stations=adaptive_fallback_stations(conn,base_model_version,cycle["data_cutoff"])
-        if fallback_stations:
-            output=np.array([float(recent) if str(station) in fallback_stations else value
+        adjustments=recent_meta_adjustments(conn,cycle["data_cutoff"])
+        if adjustments:
+            output=np.array([
+              (float(recent) if adjustments.get(str(station),(False,1.0))[0] else value)
+              * adjustments.get(str(station),(False,1.0))[1]
               for value,recent,station in zip(output,frame["lag_available"],frame["station_id"],strict=True)])
-            model_version += "-adaptive-v1"
-            print(f"Respaldo adaptativo aplicado a: {', '.join(sorted(fallback_stations))}.")
-        residual_factors=recent_residual_factors(conn,cycle["data_cutoff"])
-        if residual_factors:
-            output=np.array([value*residual_factors.get(str(station),1.0)
-              for value,station in zip(output,frame["station_id"],strict=True)])
-            model_version += "-residual-v1"
-            print(f"Corrección residual reciente aplicada a {len(residual_factors)} estaciones.")
+            fallback_stations=sorted(station for station,(use_lag,_) in adjustments.items() if use_lag)
+            model_version += "-meta-v1"
+            print(f"Selector reciente aplicado a {len(adjustments)} estaciones; persistencia: {fallback_stations}.")
         model_version=validate_model_version(model_version)
         predictions=[{"station_id":str(r.station_id),"target_at":r.target_at.isoformat(),"horizon_minutes":int(r.horizon_minutes),"value":round(float(v),3)}
                      for r,v in zip(frame.itertuples(index=False),output,strict=True)]
