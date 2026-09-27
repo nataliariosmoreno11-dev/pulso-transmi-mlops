@@ -198,7 +198,6 @@ def save(conn,cycle,predictions,receipt,run_id,key,model_version):
 def main():
     load_env()
     if not MODEL_PATH.exists(): raise RuntimeError(f"No existe el modelo: {MODEL_PATH}")
-    _,identity=api("/v1/me")
     with psycopg.connect(db_url()) as conn:
         synced=0 if os.getenv("PULSO_SKIP_SYNC")=="1" else sync_stream(conn); status,cycle=api("/v1/forecast-cycles/current")
         if status==404:
@@ -245,7 +244,7 @@ def main():
         if receipt.get("status")!="accepted" or receipt.get("predictions_received")!=cycle["expected_predictions"]:
             raise RuntimeError(f"Recibo inesperado: {receipt}")
         save(conn,cycle,predictions,receipt,run_id,key,model_version)
-        print(f"Entrega aceptada: {receipt['submission_id']} ({receipt['predictions_received']}/{receipt['expected_predictions']}); {identity.get('display_name','identidad verificada')}.")
+        print(f"Entrega aceptada: {receipt['submission_id']} ({receipt['predictions_received']}/{receipt['expected_predictions']}).")
     return 0
 
 if __name__=="__main__": raise SystemExit(main())
