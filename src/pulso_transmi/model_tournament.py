@@ -94,22 +94,33 @@ def main() -> int:
     winner = max(results[1:], key=lambda item: item["accuracy"])
     promoted = winner["accuracy"] >= incumbent_accuracy + args.minimum_improvement
     model_version = incumbent.get("model_version", "lightgbm-demand:2.0")
-    if promoted:
-        winner_name = winner["name"]
-        winner_params = dict(next(params for name, params in CANDIDATES if name == winner_name))
+    artifact_data_end = incumbent.get("metrics", {}).get("validation_through")
+    data_advanced = artifact_data_end is None or raw.observed_at.max() > pd.Timestamp(artifact_data_end)
+    refreshed = data_advanced and not promoted
+    if promoted or refreshed:
+        if promoted:
+            winner_name = winner["name"]
+            winner_params = dict(next(params for name, params in CANDIDATES if name == winner_name))
+            validation_prediction = trained[winner_name].predict(valid[FEATURES])
+            winner["promoted"] = True
+        else:
+            winner_name = incumbent_name
+            winner_params = incumbent_params
+            validation_prediction = incumbent_evaluation.predict(valid[FEATURES])
+            results[0]["refreshed"] = True
         champion = lgb.LGBMRegressor(**winner_params, random_state=42, n_jobs=2, verbosity=-1)
         full_totals = frame.groupby("station_id", observed=True).demand.sum()
         full_weight = frame.station_id.map(1 / full_totals).astype(float)
         full_weight /= full_weight.mean()
         champion.fit(frame[FEATURES], frame.demand, sample_weight=full_weight if winner_name == "l1_robust" else None)
         model_version = "lightgbm-tournament:" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        winner["promoted"] = True
         metrics = {
             "source_rows": int(len(raw)), "station_count": int(raw.station_id.nunique()),
             "train_targets": int(len(train)), "validation_targets": int(len(valid)),
             "train_through": cutoff.isoformat(), "validation_through": raw.observed_at.max().isoformat(),
-            "lightgbm": score(valid, np.clip(trained[winner_name].predict(valid[FEATURES]), 0, None)),
+            "lightgbm": score(valid, np.clip(validation_prediction, 0, None)),
             "tournament_winner": winner_name, "tournament_parameters": winner_params, "model_version": model_version,
+            "refreshed_with_new_data": refreshed,
         }
         joblib.dump({"model": champion, "features": FEATURES, "metrics": metrics, "model_version": model_version}, args.model)
         args.model.with_suffix(".metrics.json").write_text(json.dumps(metrics, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -118,7 +129,8 @@ def main() -> int:
         "calculated_at": datetime.now(timezone.utc).isoformat(), "data_through": raw.observed_at.max().isoformat(),
         "validation_start": cutoff.isoformat(), "minimum_improvement_points": args.minimum_improvement,
         "incumbent_accuracy": incumbent_accuracy, "winner": winner["name"], "winner_accuracy": winner["accuracy"],
-        "promoted": promoted, "model_version": model_version, "results": results,
+        "promoted": promoted, "refreshed": refreshed, "data_advanced": data_advanced,
+        "model_version": model_version, "results": results,
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
