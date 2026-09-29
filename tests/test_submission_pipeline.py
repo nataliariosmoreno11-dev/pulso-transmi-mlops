@@ -63,7 +63,7 @@ def test_recent_adjustment_uses_stable_rolling_bias_ratio():
 
 def test_recent_adjustment_adapts_to_confirmed_regime_shift():
     old = [("03000", 100.0, 100.0, 80.0, n) for n in range(9, 25)]
-    recent = [("03000", 55.0, 100.0, 80.0, n) for n in range(1, 9)]
+    recent = [("03000", 100.0, 55.0, 80.0, n) for n in range(1, 9)]
     adjustment = recent_meta_adjustments(_Connection(recent + old), "2026-09-11T09:00:00Z")
     use_lag, factor = adjustment["03000"]
     assert not use_lag
