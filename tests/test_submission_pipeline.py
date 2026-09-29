@@ -1,6 +1,6 @@
 import pandas as pd
 import pytest
-from pulso_transmi.submit_current_cycle import build_features, validate_predictions
+from pulso_transmi.submit_current_cycle import build_features, recent_meta_adjustments, validate_predictions
 
 def cycle():
     return {"cycle_id":"cyc_test","origin_at":"2026-09-11T09:00:00Z","data_cutoff":"2026-09-11T09:00:00Z","expected_predictions":1,
@@ -31,3 +31,31 @@ def test_model_version_rejects_unsupported_characters():
     assert validate_model_version("lightgbm-tournament:20260924T203613Z-station-cal-v1")
     with pytest.raises(ValueError):
         validate_model_version("modelo+calibrado")
+
+
+class _Cursor:
+    def __init__(self, rows):
+        self.rows = rows
+    def __enter__(self):
+        return self
+    def __exit__(self, *_):
+        return False
+    def execute(self, *_):
+        pass
+    def fetchall(self):
+        return self.rows
+
+
+class _Connection:
+    def __init__(self, rows):
+        self.rows = rows
+    def cursor(self):
+        return _Cursor(self.rows)
+
+
+def test_recent_adjustment_uses_stable_rolling_bias_ratio():
+    rows = [("02300", 100.0, 110.0, 70.0)] * 24
+    adjustment = recent_meta_adjustments(_Connection(rows), "2026-09-11T09:00:00Z")
+    use_lag, factor = adjustment["02300"]
+    assert not use_lag
+    assert factor == pytest.approx(1.10)

@@ -136,7 +136,7 @@ def calibration_factors(conn,base_version,cutoff,minimum_rows=24):
     return {station:float(np.clip(weighted_median([x[0] for x in data],[x[1] for x in data]),.8,1.2))
             for station,data in grouped.items() if len(data)>=minimum_rows}
 
-def recent_meta_adjustments(conn,cutoff,minimum_rows=8,lookback_rows=8,lag_advantage=8.0):
+def recent_meta_adjustments(conn,cutoff,minimum_rows=24,lookback_rows=96,lag_advantage=8.0):
     with conn.cursor() as db:
         db.execute("""with evaluated as (
           select p.id_estacion,p.demanda_predicha::float predicted,o.demanda::float actual,
@@ -162,8 +162,11 @@ def recent_meta_adjustments(conn,cutoff,minimum_rows=8,lookback_rows=8,lag_advan
         lag_accuracy=100*(1-sum(abs(x[0]-x[2]) for x in data)/actual_total)
         use_lag=lag_accuracy>=model_accuracy+lag_advantage
         bases=[x[2] if use_lag else x[1] for x in data]
-        valid=[(x[0]/base,base) for x,base in zip(data,bases,strict=True) if base>0]
-        factor=1.0 if not valid else float(np.clip(weighted_median([x[0] for x in valid],[x[1] for x in valid]),.8,1.2))
+        predicted_total=sum(bases)
+        # A longer rolling ratio is less sensitive to one unusual cycle. In a
+        # leakage-free replay over the latest 24 hours, 96 prior targets beat
+        # the old eight-target weighted median on mean station WAPE.
+        factor=1.0 if predicted_total<=0 else float(np.clip(actual_total/predicted_total,.85,1.15))
         adjustments[station]=(use_lag,factor)
     return adjustments
 
