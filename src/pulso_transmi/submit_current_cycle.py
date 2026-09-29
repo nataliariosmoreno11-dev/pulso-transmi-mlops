@@ -147,26 +147,30 @@ def recent_meta_adjustments(conn,cutoff,minimum_rows=24,lookback_rows=96,lag_adv
           join public.observaciones lag_o on lag_o.id_estacion=p.id_estacion
             and lag_o.instante=p.instante_objetivo-make_interval(mins => p.horizonte_minutos+30)
           where p.instante_objetivo<=%s and p.demanda_predicha>0)
-          select id_estacion,predicted,actual,recent_lag from evaluated where rn<=%s""",
+          select id_estacion,predicted,actual,recent_lag,rn from evaluated where rn<=%s""",
           (cutoff,lookback_rows))
         rows=db.fetchall()
     grouped={}
-    for station,predicted,actual,recent_lag in rows:
-        grouped.setdefault(str(station),[]).append((float(actual),float(predicted),float(recent_lag)))
+    for station,predicted,actual,recent_lag,recency in rows:
+        grouped.setdefault(str(station),[]).append((int(recency),float(actual),float(predicted),float(recent_lag)))
     adjustments={}
     for station,data in grouped.items():
         if len(data)<minimum_rows: continue
-        actual_total=sum(x[0] for x in data)
+        data=sorted(data,key=lambda x:x[0])
+        actual_total=sum(x[1] for x in data)
         if actual_total<=0: continue
-        model_accuracy=100*(1-sum(abs(x[0]-x[1]) for x in data)/actual_total)
-        lag_accuracy=100*(1-sum(abs(x[0]-x[2]) for x in data)/actual_total)
+        model_accuracy=100*(1-sum(abs(x[1]-x[2]) for x in data)/actual_total)
+        lag_accuracy=100*(1-sum(abs(x[1]-x[3]) for x in data)/actual_total)
         use_lag=lag_accuracy>=model_accuracy+lag_advantage
-        bases=[x[2] if use_lag else x[1] for x in data]
+        bases=[x[3] if use_lag else x[2] for x in data]
         predicted_total=sum(bases)
-        # A longer rolling ratio is less sensitive to one unusual cycle. In a
-        # leakage-free replay over the latest 24 hours, 96 prior targets beat
-        # the old eight-target weighted median on mean station WAPE.
-        factor=1.0 if predicted_total<=0 else float(np.clip(actual_total/predicted_total,.85,1.15))
+        long_factor=1.0 if predicted_total<=0 else actual_total/predicted_total
+        recent=data[:8]
+        recent_actual=sum(x[1] for x in recent)
+        recent_predicted=sum(x[3] if use_lag else x[2] for x in recent)
+        short_factor=long_factor if recent_predicted<=0 else recent_actual/recent_predicted
+        regime_shift=(long_factor>0 and short_factor>0 and abs(math.log(short_factor/long_factor))>=.15)
+        factor=float(np.clip(short_factor,.5,1.8) if regime_shift else np.clip(long_factor,.85,1.15))
         adjustments[station]=(use_lag,factor)
     return adjustments
 

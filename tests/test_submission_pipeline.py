@@ -54,8 +54,17 @@ class _Connection:
 
 
 def test_recent_adjustment_uses_stable_rolling_bias_ratio():
-    rows = [("02300", 100.0, 110.0, 70.0)] * 24
+    rows = [("02300", 100.0, 110.0, 70.0, n) for n in range(1, 25)]
     adjustment = recent_meta_adjustments(_Connection(rows), "2026-09-11T09:00:00Z")
     use_lag, factor = adjustment["02300"]
     assert not use_lag
     assert factor == pytest.approx(1.10)
+
+
+def test_recent_adjustment_adapts_to_confirmed_regime_shift():
+    old = [("03000", 100.0, 100.0, 80.0, n) for n in range(9, 25)]
+    recent = [("03000", 55.0, 100.0, 80.0, n) for n in range(1, 9)]
+    adjustment = recent_meta_adjustments(_Connection(recent + old), "2026-09-11T09:00:00Z")
+    use_lag, factor = adjustment["03000"]
+    assert not use_lag
+    assert factor == pytest.approx(0.55)
