@@ -3,11 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta http-equiv="refresh" content="0; url=dashboard.html">
-  <title>Pulso TransMi</title>
-  <link rel="canonical" href="dashboard.html">
+  <title>Pulso TransMi · Monitoreo MLOps</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07130e;--panel:#10241a;--line:#315c43;--text:#eff8f1;--muted:#a7b9ad;--ok:#55d98b;--warn:#efc85a;--bad:#ff7b72}*{box-sizing:border-box}body{margin:0;background:linear-gradient(135deg,#07130e,#12291d);color:var(--text);font:16px system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:34px 20px 60px}header{display:flex;justify-content:space-between;gap:20px;align-items:end;border-bottom:1px solid var(--line);padding-bottom:22px}h1{margin:0;font-size:clamp(2rem,5vw,4rem)}h2{margin-top:34px}.muted{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-top:24px}.card{background:rgba(16,36,26,.88);border:1px solid var(--line);border-radius:12px;padding:20px}.label{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.12em}.value{font-size:2rem;font-weight:750;margin-top:8px}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}table{width:100%;border-collapse:collapse;background:rgba(16,36,26,.88);border-radius:12px;overflow:hidden}th,td{text-align:left;padding:13px;border-bottom:1px solid #294737}th{color:var(--muted);font-size:.78rem;text-transform:uppercase}a{color:#91e8b3}#error{display:none;background:#47201d;border:1px solid var(--bad);padding:16px;border-radius:10px;margin-top:20px}@media(max-width:650px){header{display:block}table{font-size:.8rem}th,td{padding:9px}}</style>
 </head>
-<body>
-  <p><a href="dashboard.html">Abrir dashboard de Pulso TransMi</a></p>
-</body>
-</html>
+<body><main>
+<header><div><div class="label">Competencia · MLOps</div><h1>Pulso TransMi</h1><p class="muted">Accuracy, cobertura y drift calculados desde Supabase.</p></div><div><a href="dashboard.html">Abrir EDA histórica</a></div></header>
+<div id="error"></div>
+<section class="grid">
+  <article class="card"><div class="label">Accuracy</div><div class="value" id="accuracy">—</div></article>
+  <article class="card"><div class="label">Drift de demanda</div><div class="value" id="drift">—</div></article>
+  <article class="card"><div class="label">Cobertura</div><div class="value" id="coverage">—</div></article>
+  <article class="card"><div class="label">Decisión</div><div class="value" id="decision">—</div></article>
+  <article class="card"><div class="label">Observaciones</div><div class="value" id="observations">—</div></article>
+</section>
+<h2>Ciclos evaluados recientemente</h2>
+<table><thead><tr><th>Ciclo</th><th>Objetivo</th><th>Evaluadas</th><th>Accuracy global</th></tr></thead><tbody id="cycles"><tr><td colspan="4">Cargando…</td></tr></tbody></table>
+<p class="muted" id="updated"></p>
+</main><script>
+const pct=v=>v==null?'—':`${Number(v).toFixed(2)}%`;
+const paint=(id,value,bad,warning)=>{const el=document.getElementById(id);el.textContent=value;el.className=`value ${bad?'bad':warning?'warn':'ok'}`};
+async function refresh(){try{const r=await fetch('/api',{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error||`HTTP ${r.status}`);const m=d.monitor;paint('accuracy',pct(m.accuracy_promedio_estaciones),m.accuracy_promedio_estaciones<80,m.accuracy_promedio_estaciones<90);paint('drift',pct(100*m.drift_demanda),m.drift_demanda>.2,m.drift_demanda>.1);paint('coverage',pct(100*m.cobertura),m.cobertura<.9,m.cobertura<1);paint('decision',m.decision,m.decision==='reentrenar',m.decision==='esperar');document.getElementById('observations').textContent=Number(d.data.observations).toLocaleString('es-CO');document.getElementById('cycles').innerHTML=d.recent_cycles.map(c=>`<tr><td>${c.id_ciclo}</td><td>${new Date(c.target_at).toLocaleString('es-CO')}</td><td>${c.evaluated}</td><td>${pct(c.accuracy)}</td></tr>`).join('');document.getElementById('updated').textContent=`Actualizado: ${new Date(d.generated_at).toLocaleString('es-CO')} · Último dato: ${new Date(d.data.latest_observation).toLocaleString('es-CO')}`;document.getElementById('error').style.display='none'}catch(e){const el=document.getElementById('error');el.textContent=`No fue posible cargar el monitoreo: ${e.message}`;el.style.display='block'}}refresh();setInterval(refresh,60000);
+</script></body></html>
