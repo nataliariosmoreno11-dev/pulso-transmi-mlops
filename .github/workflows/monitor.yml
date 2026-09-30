@@ -4,6 +4,7 @@ on:
     - cron: "15 * * * *"
   workflow_dispatch:
 permissions:
+  actions: write
   contents: read
 concurrency:
   group: pulso-transmi-monitor
@@ -24,4 +25,12 @@ jobs:
           cache: pip
       - run: python -m pip install -e '.[competition]'
       - name: Calcular desempeño y decidir reentrenamiento
+        id: monitor
         run: python -m pulso_transmi.monitor_performance
+      - name: Reentrenar inmediatamente si hay drift
+        if: steps.monitor.outputs.decision == 'reentrenar'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Drift=${{ steps.monitor.outputs.drift }}; iniciando torneo."
+          gh workflow run retrain.yml --repo "${{ github.repository }}" --ref main

@@ -42,6 +42,11 @@ def main():
           values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
           (MODEL_VERSION,len({r[0] for r in rows}),total,len(evaluated),coverage,global_wape,mean_accuracy,drift,decision,json.dumps(details)))
         conn.commit()
+    output_path=os.getenv("GITHUB_OUTPUT")
+    if output_path:
+        with open(output_path,"a",encoding="utf-8") as output:
+            output.write(f"decision={decision}\n")
+            output.write(f"drift={drift if drift is not None else ''}\n")
     print(f"Monitoreo: evaluadas={len(evaluated)}/{total}, cobertura={coverage:.1%}, accuracy={mean_accuracy}, meta={target_accuracy}%, drift={drift}, decisión={decision}.")
     return 0
 
