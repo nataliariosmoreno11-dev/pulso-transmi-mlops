@@ -1,7 +1,7 @@
 name: 3 - Monitorear accuracy y drift
 on:
   schedule:
-    - cron: "15 * * * *"
+    - cron: "8,23,38,53 * * * *"
   workflow_dispatch:
 permissions:
   actions: write
@@ -28,7 +28,7 @@ jobs:
         id: monitor
         run: python -m pulso_transmi.monitor_performance
       - name: Reentrenar inmediatamente si hay drift
-        if: steps.monitor.outputs.decision == 'reentrenar'
+        if: steps.monitor.outputs.retrain_needed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

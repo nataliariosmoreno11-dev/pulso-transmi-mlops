@@ -1,6 +1,8 @@
 """Calcula cobertura, accuracy y una señal simple de drift desde Supabase."""
 import json
 import os
+from datetime import datetime
+from pathlib import Path
 import numpy as np
 import psycopg
 from pulso_transmi.submit_current_cycle import MODEL_VERSION, db_url, load_env
@@ -34,6 +36,8 @@ def main():
               and instante >= (select max(instante)-interval '8 days' from observaciones)
           ) select abs(recent.value-reference.value)/nullif(reference.value,0) from recent,reference""")
         drift=db.fetchone()[0]
+        db.execute("select max(instante) from public.observaciones")
+        latest_observation=db.fetchone()[0]
         if len(evaluated)<48: decision="esperar"
         elif (mean_accuracy is not None and mean_accuracy<target_accuracy) or (drift is not None and drift>0.20): decision="reentrenar"
         else: decision="conservar"
@@ -42,11 +46,20 @@ def main():
           values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
           (MODEL_VERSION,len({r[0] for r in rows}),total,len(evaluated),coverage,global_wape,mean_accuracy,drift,decision,json.dumps(details)))
         conn.commit()
+    metrics_path=Path("artifacts/lightgbm_demand.metrics.json")
+    trained_through=None
+    if metrics_path.exists():
+        trained_value=json.loads(metrics_path.read_text(encoding="utf-8")).get("validation_through")
+        if trained_value:
+            trained_through=datetime.fromisoformat(trained_value.replace("Z","+00:00"))
+    data_advanced=trained_through is None or (latest_observation is not None and latest_observation>trained_through)
+    retrain_needed=decision=="reentrenar" and data_advanced
     output_path=os.getenv("GITHUB_OUTPUT")
     if output_path:
         with open(output_path,"a",encoding="utf-8") as output:
             output.write(f"decision={decision}\n")
             output.write(f"drift={drift if drift is not None else ''}\n")
+            output.write(f"retrain_needed={str(retrain_needed).lower()}\n")
     print(f"Monitoreo: evaluadas={len(evaluated)}/{total}, cobertura={coverage:.1%}, accuracy={mean_accuracy}, meta={target_accuracy}%, drift={drift}, decisión={decision}.")
     return 0
 
