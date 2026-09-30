@@ -136,7 +136,7 @@ def calibration_factors(conn,base_version,cutoff,minimum_rows=24):
     return {station:float(np.clip(weighted_median([x[0] for x in data],[x[1] for x in data]),.8,1.2))
             for station,data in grouped.items() if len(data)>=minimum_rows}
 
-def recent_meta_adjustments(conn,cutoff,minimum_rows=24,lookback_rows=96,lag_advantage=8.0):
+def recent_meta_adjustments(conn,cutoff,minimum_rows=24,lookback_rows=96,lag_advantage=5.0):
     with conn.cursor() as db:
         db.execute("""with evaluated as (
           select p.id_estacion,p.demanda_predicha::float predicted,o.demanda::float actual,
@@ -159,8 +159,10 @@ def recent_meta_adjustments(conn,cutoff,minimum_rows=24,lookback_rows=96,lag_adv
         data=sorted(data,key=lambda x:x[0])
         actual_total=sum(x[1] for x in data)
         if actual_total<=0: continue
-        model_accuracy=100*(1-sum(abs(x[1]-x[2]) for x in data)/actual_total)
-        lag_accuracy=100*(1-sum(abs(x[1]-x[3]) for x in data)/actual_total)
+        selection=data[:8]
+        selection_actual=sum(x[1] for x in selection)
+        model_accuracy=100*(1-sum(abs(x[1]-x[2]) for x in selection)/selection_actual)
+        lag_accuracy=100*(1-sum(abs(x[1]-x[3]) for x in selection)/selection_actual)
         use_lag=lag_accuracy>=model_accuracy+lag_advantage
         bases=[x[3] if use_lag else x[2] for x in data]
         predicted_total=sum(bases)

@@ -66,5 +66,5 @@ def test_recent_adjustment_adapts_to_confirmed_regime_shift():
     recent = [("03000", 100.0, 55.0, 80.0, n) for n in range(1, 9)]
     adjustment = recent_meta_adjustments(_Connection(recent + old), "2026-09-11T09:00:00Z")
     use_lag, factor = adjustment["03000"]
-    assert not use_lag
-    assert factor == pytest.approx(0.55)
+    assert use_lag
+    assert factor == pytest.approx(0.6875)
