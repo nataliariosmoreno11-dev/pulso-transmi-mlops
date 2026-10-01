@@ -169,7 +169,11 @@ def recent_meta_adjustments(conn,cutoff,minimum_rows=24,lookback_rows=96,lag_adv
         # Bajo drift severo las predicciones guardadas ya contienen ajustes de
         # ciclos anteriores. Volver a aplicar un factor sobre ellas crea
         # realimentación y puede hacer crecer el error en cada entrega.
-        use_lag4=(lag4_accuracy>=max(model_accuracy,lag_accuracy)+lag_advantage) or (model_accuracy<60.0 and lag4_accuracy>lag_accuracy)
+        # Si las predicciones guardadas ya eran el ciclo de 4 h, ambas métricas
+        # empatan. Preferimos conservar esa estrategia para evitar oscilar de
+        # vuelta al modelo que no produjo realmente ese buen resultado.
+        lag4_near_best=lag4_accuracy>=max(model_accuracy,lag_accuracy)-1.0
+        use_lag4=lag4_near_best or (lag4_accuracy>=max(model_accuracy,lag_accuracy)+lag_advantage) or (model_accuracy<60.0 and lag4_accuracy>lag_accuracy)
         use_lag=(not use_lag4) and ((model_accuracy<60.0) or (lag_accuracy>=model_accuracy+lag_advantage))
         bases=[x[4] if use_lag4 else x[3] if use_lag else x[2] for x in data]
         predicted_total=sum(bases)

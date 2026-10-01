@@ -80,3 +80,13 @@ def test_recent_adjustment_uses_safe_lag_when_model_collapses():
     assert not use_lag
     assert use_lag4
     assert factor == pytest.approx(1.0)
+
+
+def test_recent_adjustment_keeps_four_hour_strategy_on_tie():
+    rows = [("07107", 100.0, 102.0, 70.0, 100.5, n) for n in range(1, 25)]
+    use_lag, use_lag4, factor = recent_meta_adjustments(
+        _Connection(rows), "2026-09-11T09:00:00Z"
+    )["07107"]
+    assert not use_lag
+    assert use_lag4
+    assert factor == pytest.approx(1.0)
