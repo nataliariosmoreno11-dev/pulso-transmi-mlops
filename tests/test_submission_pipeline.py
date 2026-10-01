@@ -54,26 +54,29 @@ class _Connection:
 
 
 def test_recent_adjustment_uses_stable_rolling_bias_ratio():
-    rows = [("02300", 100.0, 110.0, 70.0, n) for n in range(1, 25)]
+    rows = [("02300", 100.0, 110.0, 70.0, 90.0, n) for n in range(1, 25)]
     adjustment = recent_meta_adjustments(_Connection(rows), "2026-09-11T09:00:00Z")
-    use_lag, factor = adjustment["02300"]
+    use_lag, use_lag4, factor = adjustment["02300"]
     assert not use_lag
+    assert not use_lag4
     assert factor == pytest.approx(1.10)
 
 
 def test_recent_adjustment_adapts_to_confirmed_regime_shift():
-    old = [("03000", 100.0, 100.0, 80.0, n) for n in range(9, 25)]
-    recent = [("03000", 100.0, 55.0, 80.0, n) for n in range(1, 9)]
+    old = [("03000", 100.0, 100.0, 80.0, 60.0, n) for n in range(9, 25)]
+    recent = [("03000", 100.0, 55.0, 80.0, 56.0, n) for n in range(1, 9)]
     adjustment = recent_meta_adjustments(_Connection(recent + old), "2026-09-11T09:00:00Z")
-    use_lag, factor = adjustment["03000"]
-    assert use_lag
+    use_lag, use_lag4, factor = adjustment["03000"]
+    assert not use_lag
+    assert use_lag4
     assert factor == pytest.approx(1.0)
 
 
 def test_recent_adjustment_uses_safe_lag_when_model_collapses():
-    rows = [("05100", 220.0, 100.0, 105.0, n) for n in range(1, 25)]
-    use_lag, factor = recent_meta_adjustments(
+    rows = [("05100", 220.0, 100.0, 105.0, 98.0, n) for n in range(1, 25)]
+    use_lag, use_lag4, factor = recent_meta_adjustments(
         _Connection(rows), "2026-09-11T09:00:00Z"
     )["05100"]
-    assert use_lag
+    assert not use_lag
+    assert use_lag4
     assert factor == pytest.approx(1.0)

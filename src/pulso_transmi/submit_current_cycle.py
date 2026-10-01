@@ -106,7 +106,7 @@ def build_features(history,cycle,names):
         if horizon not in (15,30,45,60): raise RuntimeError(f"Horizonte no soportado: {horizon}")
         times={"lag_available":target_at-pd.Timedelta(minutes=15*(h+2)),"lag_15m":target_at-pd.Timedelta(minutes=15*(h+3)),
                "lag_1h":target_at-pd.Timedelta(minutes=15*(h+6)),"lag_2h":target_at-pd.Timedelta(minutes=15*(h+10)),
-               "lag_day":target_at-pd.Timedelta(days=1),"lag_2days":target_at-pd.Timedelta(days=2),"lag_week":target_at-pd.Timedelta(days=7)}
+               "lag_4h":target_at-pd.Timedelta(hours=4),"lag_day":target_at-pd.Timedelta(days=1),"lag_2days":target_at-pd.Timedelta(days=2),"lag_week":target_at-pd.Timedelta(days=7)}
         missing=[n for n,t in times.items() if (station,t) not in values]
         if missing: raise RuntimeError(f"Faltan rezagos para {station} {target_at}: {missing}")
         rows.append({"station_id":station,"horizon_steps":h,"slot":target_at.hour*4+target_at.minute//15,
@@ -140,19 +140,21 @@ def recent_meta_adjustments(conn,cutoff,minimum_rows=24,lookback_rows=96,lag_adv
     with conn.cursor() as db:
         db.execute("""with evaluated as (
           select p.id_estacion,p.demanda_predicha::float predicted,o.demanda::float actual,
-                 lag_o.demanda::float recent_lag,
+                 lag_o.demanda::float recent_lag, lag4_o.demanda::float lag_4h,
                  row_number() over(partition by p.id_estacion order by p.instante_objetivo desc) as rn
           from public.predicciones_api p join public.observaciones o
           on o.id_estacion=p.id_estacion and o.instante=p.instante_objetivo
           join public.observaciones lag_o on lag_o.id_estacion=p.id_estacion
             and lag_o.instante=p.instante_objetivo-make_interval(mins => p.horizonte_minutos+30)
+          join public.observaciones lag4_o on lag4_o.id_estacion=p.id_estacion
+            and lag4_o.instante=p.instante_objetivo-interval '4 hours'
           where p.instante_objetivo<=%s and p.demanda_predicha>0)
-          select id_estacion,predicted,actual,recent_lag,rn from evaluated where rn<=%s""",
+          select id_estacion,predicted,actual,recent_lag,lag_4h,rn from evaluated where rn<=%s""",
           (cutoff,lookback_rows))
         rows=db.fetchall()
     grouped={}
-    for station,predicted,actual,recent_lag,recency in rows:
-        grouped.setdefault(str(station),[]).append((int(recency),float(actual),float(predicted),float(recent_lag)))
+    for station,predicted,actual,recent_lag,lag_4h,recency in rows:
+        grouped.setdefault(str(station),[]).append((int(recency),float(actual),float(predicted),float(recent_lag),float(lag_4h)))
     adjustments={}
     for station,data in grouped.items():
         if len(data)<minimum_rows: continue
@@ -163,21 +165,23 @@ def recent_meta_adjustments(conn,cutoff,minimum_rows=24,lookback_rows=96,lag_adv
         selection_actual=sum(x[1] for x in selection)
         model_accuracy=100*(1-sum(abs(x[1]-x[2]) for x in selection)/selection_actual)
         lag_accuracy=100*(1-sum(abs(x[1]-x[3]) for x in selection)/selection_actual)
+        lag4_accuracy=100*(1-sum(abs(x[1]-x[4]) for x in selection)/selection_actual)
         # Bajo drift severo las predicciones guardadas ya contienen ajustes de
         # ciclos anteriores. Volver a aplicar un factor sobre ellas crea
         # realimentación y puede hacer crecer el error en cada entrega.
-        use_lag=(model_accuracy<60.0) or (lag_accuracy>=model_accuracy+lag_advantage)
-        bases=[x[3] if use_lag else x[2] for x in data]
+        use_lag4=(lag4_accuracy>=max(model_accuracy,lag_accuracy)+lag_advantage) or (model_accuracy<60.0 and lag4_accuracy>lag_accuracy)
+        use_lag=(not use_lag4) and ((model_accuracy<60.0) or (lag_accuracy>=model_accuracy+lag_advantage))
+        bases=[x[4] if use_lag4 else x[3] if use_lag else x[2] for x in data]
         predicted_total=sum(bases)
         long_factor=1.0 if predicted_total<=0 else actual_total/predicted_total
         recent=data[:8]
         recent_actual=sum(x[1] for x in recent)
-        recent_predicted=sum(x[3] if use_lag else x[2] for x in recent)
+        recent_predicted=sum(x[4] if use_lag4 else x[3] if use_lag else x[2] for x in recent)
         short_factor=long_factor if recent_predicted<=0 else recent_actual/recent_predicted
         regime_shift=(long_factor>0 and short_factor>0 and abs(math.log(short_factor/long_factor))>=.15)
         # La persistencia no se recalibra con predicciones ya ajustadas.
-        factor=1.0 if use_lag else float(np.clip(short_factor if regime_shift else long_factor,.85,1.15))
-        adjustments[station]=(use_lag,factor)
+        factor=1.0 if (use_lag or use_lag4) else float(np.clip(short_factor if regime_shift else long_factor,.85,1.15))
+        adjustments[station]=(use_lag,use_lag4,factor)
     return adjustments
 
 def validate_predictions(cycle,predictions):
@@ -236,12 +240,14 @@ def main():
         adjustments=recent_meta_adjustments(conn,cycle["data_cutoff"])
         if adjustments:
             output=np.array([
-              (float(recent) if adjustments.get(str(station),(False,1.0))[0] else value)
-              * adjustments.get(str(station),(False,1.0))[1]
-              for value,recent,station in zip(output,frame["lag_available"],frame["station_id"],strict=True)])
-            fallback_stations=sorted(station for station,(use_lag,_) in adjustments.items() if use_lag)
-            model_version += "-meta-v1"
-            print(f"Selector reciente aplicado a {len(adjustments)} estaciones; persistencia: {fallback_stations}.")
+              (float(lag4) if adjustments.get(str(station),(False,False,1.0))[1] else
+               float(recent) if adjustments.get(str(station),(False,False,1.0))[0] else value)
+              * adjustments.get(str(station),(False,False,1.0))[2]
+              for value,recent,lag4,station in zip(output,frame["lag_available"],frame["lag_4h"],frame["station_id"],strict=True)])
+            fallback_stations=sorted(station for station,(use_lag,_,_) in adjustments.items() if use_lag)
+            lag4_stations=sorted(station for station,(_,use_lag4,_) in adjustments.items() if use_lag4)
+            model_version += "-meta-v2"
+            print(f"Selector reciente aplicado a {len(adjustments)} estaciones; persistencia: {fallback_stations}; ciclo 4h: {lag4_stations}.")
         model_version=validate_model_version(model_version)
         predictions=[{"station_id":str(r.station_id),"target_at":r.target_at.isoformat(),"horizon_minutes":int(r.horizon_minutes),"value":round(float(v),3)}
                      for r,v in zip(frame.itertuples(index=False),output,strict=True)]
