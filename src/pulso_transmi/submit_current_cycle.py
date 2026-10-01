@@ -163,7 +163,10 @@ def recent_meta_adjustments(conn,cutoff,minimum_rows=24,lookback_rows=96,lag_adv
         selection_actual=sum(x[1] for x in selection)
         model_accuracy=100*(1-sum(abs(x[1]-x[2]) for x in selection)/selection_actual)
         lag_accuracy=100*(1-sum(abs(x[1]-x[3]) for x in selection)/selection_actual)
-        use_lag=lag_accuracy>=model_accuracy+lag_advantage
+        # Bajo drift severo las predicciones guardadas ya contienen ajustes de
+        # ciclos anteriores. Volver a aplicar un factor sobre ellas crea
+        # realimentación y puede hacer crecer el error en cada entrega.
+        use_lag=(model_accuracy<60.0) or (lag_accuracy>=model_accuracy+lag_advantage)
         bases=[x[3] if use_lag else x[2] for x in data]
         predicted_total=sum(bases)
         long_factor=1.0 if predicted_total<=0 else actual_total/predicted_total
@@ -172,7 +175,8 @@ def recent_meta_adjustments(conn,cutoff,minimum_rows=24,lookback_rows=96,lag_adv
         recent_predicted=sum(x[3] if use_lag else x[2] for x in recent)
         short_factor=long_factor if recent_predicted<=0 else recent_actual/recent_predicted
         regime_shift=(long_factor>0 and short_factor>0 and abs(math.log(short_factor/long_factor))>=.15)
-        factor=float(np.clip(short_factor,.5,1.8) if regime_shift else np.clip(long_factor,.85,1.15))
+        # La persistencia no se recalibra con predicciones ya ajustadas.
+        factor=1.0 if use_lag else float(np.clip(short_factor if regime_shift else long_factor,.85,1.15))
         adjustments[station]=(use_lag,factor)
     return adjustments
 
