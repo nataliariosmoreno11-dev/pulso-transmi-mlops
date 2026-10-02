@@ -30,12 +30,14 @@ def dashboard_data() -> dict:
             raise RuntimeError("Todavía no existen métricas de monitoreo")
         columns = [item.name for item in db.description]
         monitor = dict(zip(columns, row, strict=True))
-        db.execute("""with scored as (
-          select p.id_ciclo,max(p.instante_objetivo) target_at,count(o.demanda) evaluated,
-          100*(1-sum(abs(p.demanda_predicha-o.demanda))/nullif(sum(o.demanda),0)) accuracy
+        db.execute("""with station_scores as (
+          select p.id_ciclo,p.id_estacion,max(p.instante_objetivo) target_at,count(o.demanda) evaluated,
+          greatest(0,100*(1-sum(abs(p.demanda_predicha-o.demanda))/nullif(sum(o.demanda),0))) accuracy
           from public.predicciones_api p left join public.observaciones o
           on o.id_estacion=p.id_estacion and o.instante=p.instante_objetivo
-          group by p.id_ciclo)
+          group by p.id_ciclo,p.id_estacion), scored as (
+          select id_ciclo,max(target_at) target_at,sum(evaluated) evaluated,avg(accuracy) accuracy
+          from station_scores group by id_ciclo)
           select id_ciclo,target_at,evaluated,accuracy from scored
           where evaluated>0 order by target_at desc limit 12""")
         cycles = [dict(zip([item.name for item in db.description], item, strict=True)) for item in db.fetchall()]

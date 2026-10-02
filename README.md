@@ -128,6 +128,10 @@ las dos plataformas reemplaza el repositorio ni GitHub Actions.
 Consulta [docs/student-project.md](docs/student-project.md) para el flujo completo
 y los entregables.
 
+La política implementada para monitoreo, comparación de seis ciclos, histéresis,
+reentrenamiento y evidencia está documentada en
+[docs/fase-drift.md](docs/fase-drift.md).
+
 ## Métrica
 
 La referencia actual es:
