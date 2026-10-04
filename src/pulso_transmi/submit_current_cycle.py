@@ -281,6 +281,47 @@ def local_autoregressive_predictions(history, frame, order=2, window=24, ridge=1
         output.append(generated[-1]*scale)
     return np.asarray(output,dtype=float)
 
+def multivariate_autoregressive_predictions(history,frame,order=3,window=16,ridge=0.1):
+    """VAR corto en escala logarítmica para capturar transferencias entre estaciones."""
+    station_series={}
+    for station,group in history.groupby("station_id",sort=False):
+        ordered=group.sort_values("observed_at").set_index("observed_at")["demand"].astype(float)
+        grid=pd.date_range(ordered.index.min(),ordered.index.max(),freq="15min",tz="UTC")
+        station_series[str(station)]=ordered.reindex(grid).ffill(limit=4)
+    matrix=pd.DataFrame(station_series).dropna().sort_index()
+    positions={station:index for index,station in enumerate(matrix.columns)}
+    cache={}
+    output=[]
+    for row in frame.itertuples(index=False):
+        steps=int(row.horizon_steps)+2
+        available_at=pd.Timestamp(row.target_at)-pd.Timedelta(minutes=15*steps)
+        key=(available_at,steps)
+        if key not in cache:
+            values=np.log1p(matrix.loc[:available_at].tail(window+order).to_numpy(dtype=float))
+            if len(values)<window:
+                cache[key]=None
+            else:
+                scale=np.maximum(np.mean(np.abs(values),axis=0),1.0)
+                normalized=values/scale
+                design=np.array([normalized[i-order:i][::-1].reshape(-1) for i in range(order,len(normalized))])
+                target=normalized[order:]
+                design=np.column_stack([np.ones(len(design)),design])
+                penalty=np.eye(design.shape[1])*ridge
+                penalty[0,0]=0
+                coefficients=np.linalg.solve(design.T@design+penalty,design.T@target)
+                generated=list(normalized)
+                for _ in range(steps):
+                    inputs=np.r_[1,np.asarray(generated[-order:][::-1]).reshape(-1)]
+                    generated.append(np.maximum(0,inputs@coefficients))
+                cache[key]=np.clip(np.expm1(generated[-1]*scale),0,100000)
+        prediction=cache[key]
+        if prediction is None or str(row.station_id) not in positions:
+            fallback=max(0.0,2*float(row.lag_available)-float(row.lag_15m))
+            output.append(fallback)
+        else:
+            output.append(float(prediction[positions[str(row.station_id)]]))
+    return np.asarray(output,dtype=float)
+
 def validate_predictions(cycle,predictions):
     expected={(str(t["station_id"]),pd.Timestamp(t["target_at"])) for t in cycle["targets"]}
     actual={(p["station_id"],pd.Timestamp(p["target_at"])) for p in predictions}
@@ -348,9 +389,9 @@ def main():
             print(f"Selector reciente aplicado a {len(adjustments)} estaciones; persistencia: {fallback_stations}; mezcla periódica: {lag4_stations}.")
         latest_accuracy=latest_complete_cycle_accuracy(conn)
         if latest_accuracy is not None and latest_accuracy < 65.0:
-            output=local_autoregressive_predictions(history,frame)
-            model_version += "-ar-v1"
-            print(f"Modo de drift severo: autorregresión local activa; último ciclo={latest_accuracy:.2f}%.")
+            output=multivariate_autoregressive_predictions(history,frame)
+            model_version += "-var-v1"
+            print(f"Modo de drift severo: autorregresión multivariada activa; último ciclo={latest_accuracy:.2f}%.")
         model_version=validate_model_version(model_version)
         predictions=[{"station_id":str(r.station_id),"target_at":r.target_at.isoformat(),"horizon_minutes":int(r.horizon_minutes),"value":round(float(v),3)}
                      for r,v in zip(frame.itertuples(index=False),output,strict=True)]

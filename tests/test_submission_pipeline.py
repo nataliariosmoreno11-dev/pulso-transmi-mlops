@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 from ml.train_lightgbm import regularize_observations
-from pulso_transmi.submit_current_cycle import build_features, latest_complete_cycle_accuracy, local_autoregressive_predictions, observation_demand, recent_meta_adjustments, validate_predictions
+from pulso_transmi.submit_current_cycle import build_features, latest_complete_cycle_accuracy, local_autoregressive_predictions, multivariate_autoregressive_predictions, observation_demand, recent_meta_adjustments, validate_predictions
 
 
 def test_observation_demand_accepts_stream_v1_and_v2():
@@ -59,6 +59,21 @@ def test_local_autoregression_is_causal_and_preserves_a_stable_level():
     })
     prediction=local_autoregressive_predictions(history,frame)
     assert prediction[0] == pytest.approx(100.0)
+
+
+def test_multivariate_autoregression_is_finite_for_v2_gaps():
+    ts=pd.date_range("2026-09-10T00:00:00Z",periods=32,freq="15min")
+    history=pd.concat([
+        pd.DataFrame({"station_id":station,"observed_at":ts,"demand":level})
+        for station,level in (("02300",100.0),("03000",200.0))
+    ],ignore_index=True)
+    history=history[~((history.station_id == "03000") & (history.observed_at == ts[-3]))]
+    frame=pd.DataFrame({
+        "station_id":["02300","03000"],"target_at":[ts[-1]+pd.Timedelta(minutes=45)]*2,
+        "horizon_steps":[1,1],"lag_available":[100.0,200.0],"lag_15m":[100.0,200.0],
+    })
+    prediction=multivariate_autoregressive_predictions(history,frame)
+    assert prediction == pytest.approx([100.0,200.0],rel=0.02)
 
 def test_validator_rejects_missing_target():
     with pytest.raises(RuntimeError,match="no coinciden"):
