@@ -241,14 +241,19 @@ def recent_meta_adjustments(conn,cutoff,minimum_rows=24,lookback_rows=96,lag_adv
     return adjustments
 
 def latest_complete_cycle_accuracy(conn):
-    """Accuracy WAPE global del ciclo completo más reciente."""
+    """Accuracy oficial media por estación del ciclo completo más reciente."""
     with conn.cursor() as db:
-        db.execute("""select 100*(1-sum(abs(p.demanda_predicha-o.demanda))::float8/
-          nullif(sum(o.demanda),0)) accuracy
+        db.execute("""with station_scores as (
+          select p.id_ciclo,p.id_estacion,count(*) targets,max(p.instante_objetivo) target_at,
+                 greatest(0,100*(1-sum(abs(p.demanda_predicha-o.demanda))::float8/
+                   nullif(sum(o.demanda),0))) accuracy
           from public.predicciones_api p join public.observaciones o
           on o.id_estacion=p.id_estacion and o.instante=p.instante_objetivo
-          group by p.id_ciclo having count(*)=48
-          order by max(p.instante_objetivo) desc limit 1""")
+          group by p.id_ciclo,p.id_estacion), cycles as (
+          select id_ciclo,max(target_at) target_at,sum(targets) targets,avg(accuracy) accuracy
+          from station_scores group by id_ciclo)
+          select accuracy from cycles where targets=48
+          order by target_at desc limit 1""")
         row=db.fetchone()
     return float(row[0]) if row and row[0] is not None else None
 
