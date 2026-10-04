@@ -6,6 +6,7 @@ from pulso_transmi.submit_current_cycle import build_features, observation_deman
 def test_observation_demand_accepts_stream_v1_and_v2():
     assert observation_demand({"demand": 17}) == 17
     assert observation_demand({"schema_version": 2, "measurement": {"value": "23.00", "unit": "passengers", "quality": "ok"}}) == 23
+    assert observation_demand({"schema_version": 2, "measurement": {"value": None, "quality": "missing"}}) is None
 
 
 def test_observation_demand_rejects_fractional_counts():

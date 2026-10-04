@@ -68,6 +68,8 @@ def observation_demand(row):
         if not isinstance(measurement,dict) or "value" not in measurement:
             raise RuntimeError(f"Observación sin demanda compatible; campos={sorted(row)}")
         value=measurement["value"]
+    if value is None:
+        return None
     try:
         parsed=Decimal(str(value))
     except InvalidOperation as exc:
@@ -83,14 +85,22 @@ def sync_stream(conn):
     cursor = state[0] if state else None
     total=0
     changed=0
+    skipped=0
     for _ in range(1000):
         path="/v1/stream/observations?limit=500"+(f"&cursor={quote(cursor,safe='')}" if cursor else "")
         _,page=api(path); rows=page.get("data",[])
+        parsed=[]
+        for row in rows:
+            demand=observation_demand(row)
+            if demand is None:
+                skipped+=1
+                continue
+            parsed.append((row["station_id"],row["observed_at"],demand))
         with conn.cursor() as db:
             db.executemany("""insert into public.observaciones(id_estacion,instante,demanda) values(%s,%s,%s)
               on conflict(id_estacion,instante) do update set demanda=excluded.demanda,recibido_en=now()
               where observaciones.demanda is distinct from excluded.demanda""",
-              [(r["station_id"],r["observed_at"],observation_demand(r)) for r in rows])
+              parsed)
             changed += max(db.rowcount, 0)
         conn.commit(); total+=len(rows)
         nxt=page.get("next_cursor")
@@ -101,7 +111,7 @@ def sync_stream(conn):
                   on conflict(recurso) do update set ultimo_instante=excluded.ultimo_instante,
                   cursor=excluded.cursor,actualizado_en=excluded.actualizado_en""", (cursor,))
             conn.commit()
-            print(f"Stream: {total} filas recorridas; {changed} nuevas o modificadas.")
+            print(f"Stream: {total} filas recorridas; {changed} nuevas o modificadas; {skipped} sin medición omitidas.")
             return changed
         if nxt==cursor: raise RuntimeError("Cursor repetido por la API")
         cursor=nxt
