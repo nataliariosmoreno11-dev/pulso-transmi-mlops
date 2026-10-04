@@ -1,5 +1,8 @@
 # Operación durante la fase de drift
 
+La evidencia concreta de schema v2, fallos, reparaciones, recuperación y
+validación está en [el informe de fase final](fase-final-evidencia.md).
+
 Este proyecto sigue la [guía oficial de adaptación](https://github.com/uexternadojz/pulso-transmi/blob/main/docs/fase-drift.md) mediante decisiones reproducibles y sin usar datos posteriores al corte del ciclo.
 
 ## Continuidad operativa
@@ -7,7 +10,7 @@ Este proyecto sigue la [guía oficial de adaptación](https://github.com/uextern
 - `1 - Collector ETL y respaldo de entrega` sincroniza observaciones y conserva el cursor de ingesta.
 - `2 - Vigilar ciclos y entregar` consulta el ciclo vigente, valida exactamente sus targets y usa una clave idempotente.
 - `entregas_api` guarda recibo, versión, corte, hash y cantidades recibidas/esperadas.
-- La cobertura de submissions se calcula como `SUM(recibidas) / SUM(esperadas)` para entregas aceptadas. Una evaluación pendiente se registra aparte y no se interpreta como ausencia.
+- La integridad de submissions se calcula como `SUM(recibidas) / SUM(esperadas)` para entregas aceptadas. No mide cobertura oficial porque no incluye ciclos sin entrega. Una evaluación pendiente se registra aparte.
 
 ## Monitoreo y decisión
 
