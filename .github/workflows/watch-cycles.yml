@@ -7,7 +7,7 @@ permissions:
   contents: read
 concurrency:
   group: pulso-transmi-cycle-watcher
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   watch:
     runs-on: ubuntu-latest
@@ -23,10 +23,4 @@ jobs:
           cache: pip
       - run: python -m pip install -e '.[competition]'
       - name: Vigilar ciclos hasta el siguiente inicio programado
-        run: |
-          for intento in $(seq 1 45); do
-            echo "Consulta ${intento}/45 - $(date -u +%FT%TZ)"
-            git pull --ff-only origin main
-            python -m pulso_transmi.submit_current_cycle
-            if [ "$intento" -lt 45 ]; then sleep 300; fi
-          done
+        run: bash scripts/watch_cycles.sh
