@@ -330,10 +330,10 @@ def validate_predictions(cycle,predictions):
     if any(not math.isfinite(float(p["value"])) or float(p["value"])<0 for p in predictions):
         raise RuntimeError("Predicción negativa, NaN o infinita")
 
-def already_sent(conn,cycle_id):
+def accepted_submission(conn,cycle_id):
     with conn.cursor() as db:
-        db.execute("select 1 from public.entregas_api where id_ciclo=%s and estado='accepted'",(cycle_id,))
-        return db.fetchone() is not None
+        db.execute("select version_modelo,intento from public.entregas_api where id_ciclo=%s and estado='accepted'",(cycle_id,))
+        return db.fetchone()
 
 def save(conn,cycle,predictions,receipt,run_id,key,model_version):
     with conn.transaction(),conn.cursor() as db:
@@ -341,7 +341,8 @@ def save(conn,cycle,predictions,receipt,run_id,key,model_version):
           estado,intento,corte_datos,cierre_ciclo,predicciones_recibidas,predicciones_esperadas,hash_payload,recibo)
           values(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
           on conflict(id_ciclo) do update set id_submission=excluded.id_submission,estado=excluded.estado,intento=excluded.intento,
-          predicciones_recibidas=excluded.predicciones_recibidas,hash_payload=excluded.hash_payload,recibo=excluded.recibo,aceptada_en=now()""",
+          version_modelo=excluded.version_modelo,predicciones_recibidas=excluded.predicciones_recibidas,
+          hash_payload=excluded.hash_payload,recibo=excluded.recibo,aceptada_en=now()""",
           (cycle["cycle_id"],model_version,receipt["submission_id"],run_id,key,receipt["status"],receipt["attempt"],cycle["data_cutoff"],
            receipt.get("closes_at") or cycle.get("closes_at"),receipt["predictions_received"],receipt["expected_predictions"],
            receipt.get("payload_hash"),json.dumps(receipt)))
@@ -363,8 +364,6 @@ def main():
         status,cycle=api("/v1/forecast-cycles/current")
         if status==404:
             print(f"Sin ciclo abierto; stream sincronizado ({synced} filas)."); return 0
-        if already_sent(conn,cycle["cycle_id"]):
-            print(f"Ciclo {cycle['cycle_id']} ya entregado; sin POST."); return 0
         artifact=joblib.load(MODEL_PATH); base_model_version=artifact.get("model_version", MODEL_VERSION); history=load_history(conn,cycle["data_cutoff"])
         frame=build_features(history,cycle,artifact["features"])
         periodic_blend=frame[["lag_4h","lag_8h","lag_12h","lag_16h"]].mean(axis=1)
@@ -393,6 +392,13 @@ def main():
             model_version += "-var-v1"
             print(f"Modo de drift severo: autorregresión multivariada activa; último ciclo={latest_accuracy:.2f}%.")
         model_version=validate_model_version(model_version)
+        accepted=accepted_submission(conn,cycle["cycle_id"])
+        if accepted and accepted[0] == model_version:
+            print(f"Ciclo {cycle['cycle_id']} ya entregado con {model_version}; sin POST."); return 0
+        if accepted and int(accepted[1]) >= 3:
+            print(f"Ciclo {cycle['cycle_id']} agotó sus tres intentos; se conserva {accepted[0]}."); return 0
+        if accepted:
+            print(f"Se reemplazará {accepted[0]} por {model_version} en el intento {int(accepted[1])+1}.")
         predictions=[{"station_id":str(r.station_id),"target_at":r.target_at.isoformat(),"horizon_minutes":int(r.horizon_minutes),"value":round(float(v),3)}
                      for r,v in zip(frame.itertuples(index=False),output,strict=True)]
         validate_predictions(cycle,predictions)
