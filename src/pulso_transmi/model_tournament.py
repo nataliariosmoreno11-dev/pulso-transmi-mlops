@@ -20,6 +20,13 @@ CANDIDATES = (
     ("l1_robust", {"objective": "regression_l1", "n_estimators": 700, "learning_rate": 0.03, "num_leaves": 127, "min_child_samples": 30}),
     ("l1_compact", {"objective": "regression_l1", "n_estimators": 700, "learning_rate": 0.03, "num_leaves": 63, "min_child_samples": 30}),
     ("l2_compact", {"objective": "regression", "n_estimators": 700, "learning_rate": 0.025, "num_leaves": 63, "min_child_samples": 25}),
+    ("l1_micro", {"objective": "regression_l1", "n_estimators": 800, "learning_rate": 0.025, "num_leaves": 31, "min_child_samples": 20}),
+    ("l1_smooth", {"objective": "regression_l1", "n_estimators": 600, "learning_rate": 0.025, "num_leaves": 31, "min_child_samples": 80}),
+    ("huber_compact", {"objective": "huber", "alpha": 0.8, "n_estimators": 700, "learning_rate": 0.025, "num_leaves": 63, "min_child_samples": 30}),
+    ("fair_compact", {"objective": "fair", "fair_c": 1.0, "n_estimators": 700, "learning_rate": 0.025, "num_leaves": 63, "min_child_samples": 30}),
+    ("poisson_compact", {"objective": "poisson", "n_estimators": 700, "learning_rate": 0.025, "num_leaves": 63, "min_child_samples": 30}),
+    ("tweedie_compact", {"objective": "tweedie", "tweedie_variance_power": 1.3, "n_estimators": 700, "learning_rate": 0.025, "num_leaves": 63, "min_child_samples": 30}),
+    ("l2_shallow", {"objective": "regression", "n_estimators": 800, "learning_rate": 0.025, "num_leaves": 31, "max_depth": 8, "min_child_samples": 50}),
 )
 
 
@@ -49,7 +56,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=Path, default=Path("artifacts/lightgbm_demand.joblib"))
     parser.add_argument("--report", type=Path, default=Path("artifacts/tournament.latest.json"))
-    parser.add_argument("--validation-days", type=int, default=7)
+    parser.add_argument("--validation-days", type=float, default=1.0)
     parser.add_argument("--minimum-improvement", type=float, default=0.10, help="Puntos porcentuales")
     args = parser.parse_args()
     load_env()

@@ -23,7 +23,22 @@ def score(frame, prediction):
     }
 
 
+def regularize_observations(observations):
+    """Restaura la cuadrícula de 15 minutos sin usar valores futuros."""
+    chunks=[]
+    for station,group in observations.groupby("station_id",sort=False):
+        group=group.sort_values("observed_at").set_index("observed_at")
+        index=pd.date_range(group.index.min(),group.index.max(),freq="15min",tz="UTC")
+        regular=group.reindex(index)
+        regular["demand"]=regular["demand"].ffill(limit=4)
+        regular["station_id"]=str(station)
+        regular.index.name="observed_at"
+        chunks.append(regular.reset_index())
+    return pd.concat(chunks,ignore_index=True).dropna(subset=["demand"])
+
+
 def make_features(observations):
+    observations = regularize_observations(observations)
     observations = observations.sort_values(["station_id", "observed_at"]).copy()
     observations["station_id"] = observations["station_id"].astype("category")
     grouped = observations.groupby("station_id", observed=True)["demand"]

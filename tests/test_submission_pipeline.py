@@ -1,5 +1,6 @@
 import pandas as pd
 import pytest
+from ml.train_lightgbm import regularize_observations
 from pulso_transmi.submit_current_cycle import build_features, latest_complete_cycle_accuracy, observation_demand, recent_meta_adjustments, validate_predictions
 
 
@@ -12,6 +13,17 @@ def test_observation_demand_accepts_stream_v1_and_v2():
 def test_observation_demand_rejects_fractional_counts():
     with pytest.raises(RuntimeError, match="conteo entero"):
         observation_demand({"schema_version": 2, "measurement": {"value": "23.5"}})
+
+
+def test_training_grid_fills_isolated_gap_with_past_value():
+    frame=pd.DataFrame({
+        "station_id":["02300","02300"],
+        "observed_at":pd.to_datetime(["2026-09-20T10:00:00Z","2026-09-20T10:30:00Z"]),
+        "demand":[100,120],
+    })
+    regular=regularize_observations(frame)
+    filled=regular.loc[regular.observed_at == pd.Timestamp("2026-09-20T10:15:00Z"),"demand"]
+    assert filled.iloc[0] == 100
 
 def cycle():
     return {"cycle_id":"cyc_test","origin_at":"2026-09-11T09:00:00Z","data_cutoff":"2026-09-11T09:00:00Z","expected_predictions":1,
