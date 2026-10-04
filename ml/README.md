@@ -24,3 +24,26 @@ al menos 0,10 puntos porcentuales. El ganador se reentrena con toda la historia,
 se guarda en `artifacts/lightgbm_demand.joblib` y su versión queda incluida en
 las siguientes entregas. Cada ejecución publica `tournament.latest.json` como
 artefacto de GitHub Actions, incluso cuando conserva el campeón.
+
+## Validación de VAR v2
+
+El modelo adaptativo activo es `var-v2`; VAR v1 está retirado. LightGBM solo
+puede sustituirlo cuando tanto el último ciclo completo como su validación
+alcanzan el 80% (`PULSO_ADAPTATION_TARGET`). Esto es un umbral de selección,
+no una garantía de accuracy en ciclos futuros.
+
+```bash
+python -m ml.backtest_var
+```
+
+El backtest compara doce configuraciones en 72 horas de datos: selecciona con
+las primeras 48 y evalúa con las últimas 24. Respeta 30 minutos de retraso de
+publicación, usa únicamente historia anterior a cada pronóstico y excluye
+ciclos simulados con targets sin observación. Reporta media, mínimo y ciclos
+por debajo de 80%. Estas simulaciones no equivalen al leaderboard oficial,
+que también penaliza ciclos sin entrega.
+
+El torneo publica `validacion-var-<run_id>` con el reporte. Un candidato solo
+queda habilitado para revisión si tiene al menos seis ciclos completos de
+evaluación, supera al VAR v2 en 0,5 puntos, alcanza 80% de media y no empeora
+el mínimo ni aumenta los ciclos bajo 80%. El reporte no cambia producción.

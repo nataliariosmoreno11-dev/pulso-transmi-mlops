@@ -116,6 +116,23 @@ def test_var_remains_active_until_cycle_and_challenger_clear_target():
     assert not use_multivariate_fallback(82.0,strong)
 
 
+def test_var_does_not_yield_to_challenger_below_eighty_percent():
+    challenger={"metrics":{"lightgbm":{"accuracy_mean_12_stations":79.9}}}
+    assert use_multivariate_fallback(85.0,challenger)
+    assert use_multivariate_fallback(79.9,{"metrics":{"lightgbm":{"accuracy_mean_12_stations":85.0}}})
+
+
+def test_var_predictions_do_not_use_future_observations():
+    ts=pd.date_range("2026-09-10T00:00:00Z",periods=64,freq="15min")
+    history=pd.DataFrame({"station_id":"02300","observed_at":ts,"demand":100.0})
+    available=ts[40]
+    frame=pd.DataFrame({"station_id":["02300"],"target_at":[available+pd.Timedelta(minutes=45)],
+                        "horizon_steps":[1],"lag_available":[100.0],"lag_15m":[100.0]})
+    expected=multivariate_autoregressive_predictions(history,frame)
+    history.loc[history.observed_at>available,"demand"]=100000.0
+    assert multivariate_autoregressive_predictions(history,frame) == pytest.approx(expected)
+
+
 def test_recent_adjustment_uses_stable_rolling_bias_ratio():
     rows = [("02300", 100.0, 110.0, 70.0, 90.0, n) for n in range(1, 25)]
     adjustment = recent_meta_adjustments(_Connection(rows), "2026-09-11T09:00:00Z")

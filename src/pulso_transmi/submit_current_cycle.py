@@ -257,7 +257,7 @@ def latest_complete_cycle_accuracy(conn):
         row=db.fetchone()
     return float(row[0]) if row and row[0] is not None else None
 
-def use_multivariate_fallback(latest_accuracy,artifact,target=75.0):
+def use_multivariate_fallback(latest_accuracy,artifact,target=80.0):
     validation=(artifact.get("metrics",{}).get("lightgbm",{})
                 .get("accuracy_mean_12_stations"))
     if latest_accuracy is None:
@@ -375,7 +375,7 @@ def main():
             model_version += "-meta-v2"
             print(f"Selector reciente aplicado a {len(adjustments)} estaciones; persistencia: {fallback_stations}; mezcla periódica: {lag4_stations}.")
         latest_accuracy=latest_complete_cycle_accuracy(conn)
-        adaptation_target=float(os.getenv("PULSO_ADAPTATION_TARGET","75"))
+        adaptation_target=float(os.getenv("PULSO_ADAPTATION_TARGET","80"))
         if use_multivariate_fallback(latest_accuracy,artifact,adaptation_target):
             output=multivariate_autoregressive_predictions(history,frame)
             model_version += "-var-v2"
