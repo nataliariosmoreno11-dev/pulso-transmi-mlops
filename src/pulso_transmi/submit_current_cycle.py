@@ -127,7 +127,7 @@ def load_history(conn,cutoff):
 
 def build_features(history,cycle,names):
     values={(str(r.station_id),pd.Timestamp(r.observed_at)):float(r.demand) for r in history.itertuples(index=False)}
-    stations=sorted(history.station_id.astype(str).unique()); rows=[]
+    stations=sorted(history.station_id.astype(str).unique()); rows=[]; imputed=0
     for target in cycle["targets"]:
         station=str(target["station_id"]); target_at=pd.Timestamp(target["target_at"])
         horizon=int(target.get("horizon_minutes") or (target_at-pd.Timestamp(cycle["origin_at"])).total_seconds()/60); h=int(horizon//15)
@@ -135,15 +135,35 @@ def build_features(history,cycle,names):
         times={"lag_available":target_at-pd.Timedelta(minutes=15*(h+2)),"lag_15m":target_at-pd.Timedelta(minutes=15*(h+3)),
                "lag_1h":target_at-pd.Timedelta(minutes=15*(h+6)),"lag_2h":target_at-pd.Timedelta(minutes=15*(h+10)),
                "lag_4h":target_at-pd.Timedelta(hours=4),"lag_8h":target_at-pd.Timedelta(hours=8),"lag_12h":target_at-pd.Timedelta(hours=12),"lag_16h":target_at-pd.Timedelta(hours=16),"lag_day":target_at-pd.Timedelta(days=1),"lag_2days":target_at-pd.Timedelta(days=2),"lag_week":target_at-pd.Timedelta(days=7)}
-        missing=[n for n,t in times.items() if (station,t) not in values]
+        feature_values={}
+        missing=[]
+        for name,instant in times.items():
+            key=(station,instant)
+            if key in values:
+                feature_values[name]=values[key]
+                continue
+            # El stream v2 puede marcar una medición aislada como no disponible.
+            # Usamos solo el último dato anterior, nunca información futura.
+            replacement=None
+            for step in range(1,5):
+                previous=(station,instant-pd.Timedelta(minutes=15*step))
+                if previous in values:
+                    replacement=values[previous]
+                    break
+            if replacement is None:
+                missing.append(name)
+            else:
+                feature_values[name]=replacement
+                imputed+=1
         if missing: raise RuntimeError(f"Faltan rezagos para {station} {target_at}: {missing}")
         rows.append({"station_id":station,"horizon_steps":h,"slot":target_at.hour*4+target_at.minute//15,
           "day_of_week":target_at.dayofweek,"is_weekend":int(target_at.dayofweek>=5),
-          **{n:values[(station,t)] for n,t in times.items()},"target_at":target_at,"horizon_minutes":horizon})
+          **feature_values,"target_at":target_at,"horizon_minutes":horizon})
     frame=pd.DataFrame(rows); frame["station_id"]=pd.Categorical(frame["station_id"],categories=stations)
     for column, categories in (("horizon_steps", [1, 2, 3, 4]), ("slot", list(range(96))), ("day_of_week", list(range(7))), ("is_weekend", [0, 1])):
         frame[column] = pd.Categorical(frame[column], categories=categories)
     if set(names)-set(frame): raise RuntimeError(f"Variables desconocidas: {sorted(set(names)-set(frame))}")
+    if imputed: print(f"Rezagos ausentes imputados causalmente: {imputed}.")
     return frame
 
 def weighted_median(values, weights):

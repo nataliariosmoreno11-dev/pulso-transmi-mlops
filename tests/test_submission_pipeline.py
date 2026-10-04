@@ -26,6 +26,17 @@ def test_features_respect_available_history():
     assert frame.loc[0,"lag_available"]==lookup[pd.Timestamp("2026-09-11T08:30:00Z")]
     assert frame.loc[0,"lag_day"]==lookup[pd.Timestamp("2026-09-10T09:15:00Z")]
 
+
+def test_features_fill_isolated_missing_lag_from_previous_observation():
+    ts=pd.date_range("2026-09-04T00:00:00Z","2026-09-11T09:00:00Z",freq="15min")
+    history=pd.DataFrame({"station_id":"02300","observed_at":ts,"demand":range(len(ts))})
+    missing=pd.Timestamp("2026-09-11T08:30:00Z")
+    history=history[history.observed_at != missing]
+    names=["station_id","horizon_steps","slot","day_of_week","is_weekend","lag_available","lag_15m","lag_1h","lag_2h","lag_day","lag_2days","lag_week"]
+    frame=build_features(history,cycle(),names)
+    expected=history.set_index("observed_at").loc[pd.Timestamp("2026-09-11T08:15:00Z"),"demand"]
+    assert frame.loc[0,"lag_available"] == expected
+
 def test_validator_rejects_missing_target():
     with pytest.raises(RuntimeError,match="no coinciden"):
         validate_predictions(cycle(),[])
