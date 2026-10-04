@@ -235,22 +235,8 @@ def recent_meta_adjustments(conn,cutoff,minimum_rows=24,lookback_rows=96,lag_adv
         recent_predicted=sum(x[4] if use_lag4 else x[3] if use_lag else x[2] for x in recent)
         short_factor=long_factor if recent_predicted<=0 else recent_actual/recent_predicted
         regime_shift=(long_factor>0 and short_factor>0 and abs(math.log(short_factor/long_factor))>=.15)
-        # Un desplome confirmado en el último ciclo indica cambio de régimen.
-        # Se conserva la forma periódica, pero se corrige su nivel por estación
-        # con datos que ya fueron evaluados. El límite evita extrapolaciones
-        # explosivas cuando el denominador es pequeño.
-        latest=data[:4]
-        latest_actual=sum(x[1] for x in latest)
-        latest_model_error=sum(abs(x[1]-x[2]) for x in latest)
-        latest_model_accuracy=100*(1-latest_model_error/latest_actual) if latest_actual>0 else 0.0
-        if latest_model_accuracy < 65.0:
-            latest_periodic=sum(x[4] for x in latest)
-            use_lag=False
-            use_lag4=True
-            factor=1.0 if latest_periodic<=0 else float(np.clip(latest_actual/latest_periodic,.5,2.0))
-        else:
-            # La persistencia normal no se recalibra con predicciones ya ajustadas.
-            factor=1.0 if (use_lag or use_lag4) else float(np.clip(short_factor if regime_shift else long_factor,.85,1.15))
+        # La persistencia no se recalibra con predicciones ya ajustadas.
+        factor=1.0 if (use_lag or use_lag4) else float(np.clip(short_factor if regime_shift else long_factor,.85,1.15))
         adjustments[station]=(use_lag,use_lag4,factor)
     return adjustments
 

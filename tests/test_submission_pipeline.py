@@ -101,18 +101,7 @@ def test_recent_adjustment_uses_safe_lag_when_model_collapses():
     )["05100"]
     assert not use_lag
     assert use_lag4
-    assert factor == pytest.approx(100 / 98)
-
-
-def test_recent_adjustment_scales_periodic_level_after_latest_cycle_collapse():
-    older = [("06000", 100.0, 100.0, 80.0, 100.0, n) for n in range(5, 25)]
-    latest = [("06000", 100.0, 180.0, 130.0, 105.0, n) for n in range(1, 5)]
-    use_lag, use_lag4, factor = recent_meta_adjustments(
-        _Connection(latest + older), "2026-09-20T15:00:00Z"
-    )["06000"]
-    assert not use_lag
-    assert use_lag4
-    assert factor == pytest.approx(180 / 105)
+    assert factor == pytest.approx(1.0)
 
 
 def test_recent_adjustment_keeps_four_hour_strategy_on_tie():
