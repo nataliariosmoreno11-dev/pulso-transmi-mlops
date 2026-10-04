@@ -1,6 +1,11 @@
 import pandas as pd
 import pytest
-from pulso_transmi.submit_current_cycle import build_features, recent_meta_adjustments, validate_predictions
+from pulso_transmi.submit_current_cycle import build_features, observation_demand, recent_meta_adjustments, validate_predictions
+
+
+def test_observation_demand_accepts_stream_v1_and_v2():
+    assert observation_demand({"demand": 17}) == 17
+    assert observation_demand({"schema_version": 2, "measurement": {"value": 23, "unit": "passengers", "quality": "ok"}}) == 23
 
 def cycle():
     return {"cycle_id":"cyc_test","origin_at":"2026-09-11T09:00:00Z","data_cutoff":"2026-09-11T09:00:00Z","expected_predictions":1,

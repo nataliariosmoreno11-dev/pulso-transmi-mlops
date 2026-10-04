@@ -58,6 +58,15 @@ def api(path,payload=None,key=None):
             time.sleep(2**attempt)
     raise AssertionError
 
+def observation_demand(row):
+    """Lee demanda tanto del contrato v1 como del sobre v2 del stream."""
+    if "demand" in row:
+        return row["demand"]
+    measurement=row.get("measurement")
+    if isinstance(measurement,dict) and "value" in measurement:
+        return measurement["value"]
+    raise RuntimeError(f"Observación sin demanda compatible; campos={sorted(row)}")
+
 def sync_stream(conn):
     with conn.cursor() as db:
         db.execute("select cursor from public.estado_ingesta where recurso='observations'")
@@ -72,7 +81,7 @@ def sync_stream(conn):
             db.executemany("""insert into public.observaciones(id_estacion,instante,demanda) values(%s,%s,%s)
               on conflict(id_estacion,instante) do update set demanda=excluded.demanda,recibido_en=now()
               where observaciones.demanda is distinct from excluded.demanda""",
-              [(r["station_id"],r["observed_at"],r["demand"]) for r in rows])
+              [(r["station_id"],r["observed_at"],observation_demand(r)) for r in rows])
             changed += max(db.rowcount, 0)
         conn.commit(); total+=len(rows)
         nxt=page.get("next_cursor")
