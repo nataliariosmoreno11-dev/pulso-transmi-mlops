@@ -264,35 +264,6 @@ def use_multivariate_fallback(latest_accuracy,artifact,target=75.0):
         return False
     return latest_accuracy < target or validation is None or float(validation) < target
 
-def local_autoregressive_predictions(history, frame, order=2, window=24, ridge=1.0):
-    """Pronóstico local y causal para reaccionar a cambios bruscos de régimen."""
-    series={}
-    for station,group in history.groupby("station_id",sort=False):
-        ordered=group.sort_values("observed_at").set_index("observed_at")["demand"].astype(float)
-        grid=pd.date_range(ordered.index.min(),ordered.index.max(),freq="15min",tz="UTC")
-        series[str(station)]=ordered.reindex(grid).ffill(limit=4)
-    output=[]
-    for row in frame.itertuples(index=False):
-        steps=int(row.horizon_steps)+2
-        available_at=pd.Timestamp(row.target_at)-pd.Timedelta(minutes=15*steps)
-        values=series[str(row.station_id)].loc[:available_at].dropna().tail(window).to_numpy()
-        if len(values)<order+5:
-            output.append(max(0.0,2*float(row.lag_available)-float(row.lag_15m)))
-            continue
-        scale=max(float(np.mean(np.abs(values))),1.0)
-        normalized=values/scale
-        design=np.array([normalized[i-order:i][::-1] for i in range(order,len(normalized))])
-        target=normalized[order:]
-        design=np.column_stack([np.ones(len(design)),design])
-        penalty=np.eye(order+1)*ridge
-        penalty[0,0]=0
-        coefficients=np.linalg.solve(design.T@design+penalty,design.T@target)
-        generated=list(normalized)
-        for _ in range(steps):
-            generated.append(max(0.0,float(coefficients[0]+coefficients[1:]@generated[-order:][::-1])))
-        output.append(generated[-1]*scale)
-    return np.asarray(output,dtype=float)
-
 def multivariate_autoregressive_predictions(history,frame,order=3,window=32,ridge=1.0,log_transform=False):
     """VAR corto para capturar transferencias recientes entre estaciones."""
     station_series={}
