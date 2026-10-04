@@ -1,6 +1,7 @@
 """Pipeline idempotente de sincronización, inferencia y submission."""
 from __future__ import annotations
 import hashlib, json, math, os, re, time, urllib.error, urllib.request
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from urllib.parse import quote, urlsplit, urlunsplit
 import joblib, numpy as np, pandas as pd, psycopg
@@ -61,11 +62,19 @@ def api(path,payload=None,key=None):
 def observation_demand(row):
     """Lee demanda tanto del contrato v1 como del sobre v2 del stream."""
     if "demand" in row:
-        return row["demand"]
-    measurement=row.get("measurement")
-    if isinstance(measurement,dict) and "value" in measurement:
-        return measurement["value"]
-    raise RuntimeError(f"Observación sin demanda compatible; campos={sorted(row)}")
+        value=row["demand"]
+    else:
+        measurement=row.get("measurement")
+        if not isinstance(measurement,dict) or "value" not in measurement:
+            raise RuntimeError(f"Observación sin demanda compatible; campos={sorted(row)}")
+        value=measurement["value"]
+    try:
+        parsed=Decimal(str(value))
+    except InvalidOperation as exc:
+        raise RuntimeError(f"Demanda no numérica: {value!r}") from exc
+    if not parsed.is_finite() or parsed < 0 or parsed != parsed.to_integral_value():
+        raise RuntimeError(f"Demanda incompatible con conteo entero: {value!r}")
+    return int(parsed)
 
 def sync_stream(conn):
     with conn.cursor() as db:
