@@ -1,27 +1,27 @@
 {
-  "source_rows": 64860,
+  "source_rows": 65001,
   "station_count": 12,
-  "train_targets": 194928,
-  "validation_targets": 32256,
-  "train_through": "2026-09-13T12:00:00+00:00",
-  "validation_through": "2026-09-20T12:00:00+00:00",
+  "train_targets": 195504,
+  "validation_targets": 32244,
+  "train_through": "2026-09-13T15:00:00+00:00",
+  "validation_through": "2026-09-20T15:00:00+00:00",
   "lightgbm": {
-    "accuracy_mean_12_stations": 57.2928,
+    "accuracy_mean_12_stations": 56.3195,
     "accuracy_by_station": {
-      "02300": 51.3514,
-      "03000": 59.6957,
-      "05000": 49.0115,
-      "05100": 10.5732,
-      "06000": 60.2967,
-      "06111": 71.2122,
-      "07105": 65.0546,
-      "07107": 71.1212,
-      "07111": 53.7323,
-      "09000": 69.1338,
-      "09122": 55.7364,
-      "10009": 70.595
+      "02300": 51.2214,
+      "03000": 58.2278,
+      "05000": 49.7471,
+      "05100": 5.4699,
+      "06000": 60.5467,
+      "06111": 69.1524,
+      "07105": 64.938,
+      "07107": 68.956,
+      "07111": 54.4203,
+      "09000": 67.5192,
+      "09122": 55.7323,
+      "10009": 69.9026
     },
-    "wape_global": 0.434334
+    "wape_global": 0.436228
   },
   "tournament_winner": "l1_compact",
   "tournament_parameters": {
@@ -31,6 +31,6 @@
     "num_leaves": 63,
     "min_child_samples": 30
   },
-  "model_version": "lightgbm-tournament:20261003T070327Z",
+  "model_version": "lightgbm-tournament:20261004T015653Z",
   "refreshed_with_new_data": true
 }
