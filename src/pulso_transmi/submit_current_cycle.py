@@ -281,8 +281,8 @@ def local_autoregressive_predictions(history, frame, order=2, window=24, ridge=1
         output.append(generated[-1]*scale)
     return np.asarray(output,dtype=float)
 
-def multivariate_autoregressive_predictions(history,frame,order=3,window=16,ridge=0.1):
-    """VAR corto en escala logarítmica para capturar transferencias entre estaciones."""
+def multivariate_autoregressive_predictions(history,frame,order=3,window=32,ridge=1.0,log_transform=False):
+    """VAR corto para capturar transferencias recientes entre estaciones."""
     station_series={}
     for station,group in history.groupby("station_id",sort=False):
         ordered=group.sort_values("observed_at").set_index("observed_at")["demand"].astype(float)
@@ -297,7 +297,9 @@ def multivariate_autoregressive_predictions(history,frame,order=3,window=16,ridg
         available_at=pd.Timestamp(row.target_at)-pd.Timedelta(minutes=15*steps)
         key=(available_at,steps)
         if key not in cache:
-            values=np.log1p(matrix.loc[:available_at].tail(window+order).to_numpy(dtype=float))
+            values=matrix.loc[:available_at].tail(window+order).to_numpy(dtype=float)
+            if log_transform:
+                values=np.log1p(values)
             if len(values)<window:
                 cache[key]=None
             else:
@@ -313,7 +315,10 @@ def multivariate_autoregressive_predictions(history,frame,order=3,window=16,ridg
                 for _ in range(steps):
                     inputs=np.r_[1,np.asarray(generated[-order:][::-1]).reshape(-1)]
                     generated.append(np.maximum(0,inputs@coefficients))
-                cache[key]=np.clip(np.expm1(generated[-1]*scale),0,100000)
+                prediction=generated[-1]*scale
+                if log_transform:
+                    prediction=np.expm1(prediction)
+                cache[key]=np.clip(prediction,0,100000)
         prediction=cache[key]
         if prediction is None or str(row.station_id) not in positions:
             fallback=max(0.0,2*float(row.lag_available)-float(row.lag_15m))
@@ -389,7 +394,7 @@ def main():
         latest_accuracy=latest_complete_cycle_accuracy(conn)
         if latest_accuracy is not None and latest_accuracy < 65.0:
             output=multivariate_autoregressive_predictions(history,frame)
-            model_version += "-var-v1"
+            model_version += "-var-v2"
             print(f"Modo de drift severo: autorregresión multivariada activa; último ciclo={latest_accuracy:.2f}%.")
         model_version=validate_model_version(model_version)
         accepted=accepted_submission(conn,cycle["cycle_id"])
