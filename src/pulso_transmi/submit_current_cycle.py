@@ -257,6 +257,13 @@ def latest_complete_cycle_accuracy(conn):
         row=db.fetchone()
     return float(row[0]) if row and row[0] is not None else None
 
+def use_multivariate_fallback(latest_accuracy,artifact,target=75.0):
+    validation=(artifact.get("metrics",{}).get("lightgbm",{})
+                .get("accuracy_mean_12_stations"))
+    if latest_accuracy is None:
+        return False
+    return latest_accuracy < target or validation is None or float(validation) < target
+
 def local_autoregressive_predictions(history, frame, order=2, window=24, ridge=1.0):
     """Pronóstico local y causal para reaccionar a cambios bruscos de régimen."""
     series={}
@@ -397,10 +404,14 @@ def main():
             model_version += "-meta-v2"
             print(f"Selector reciente aplicado a {len(adjustments)} estaciones; persistencia: {fallback_stations}; mezcla periódica: {lag4_stations}.")
         latest_accuracy=latest_complete_cycle_accuracy(conn)
-        if latest_accuracy is not None and latest_accuracy < 65.0:
+        adaptation_target=float(os.getenv("PULSO_ADAPTATION_TARGET","75"))
+        if use_multivariate_fallback(latest_accuracy,artifact,adaptation_target):
             output=multivariate_autoregressive_predictions(history,frame)
             model_version += "-var-v2"
-            print(f"Modo de drift severo: autorregresión multivariada activa; último ciclo={latest_accuracy:.2f}%.")
+            validation=artifact.get("metrics",{}).get("lightgbm",{}).get("accuracy_mean_12_stations")
+            validation_text="sin métrica" if validation is None else f"{float(validation):.2f}%"
+            print(f"Modo adaptativo: VAR v2 activo; último ciclo={latest_accuracy:.2f}%, "
+                  f"LightGBM validado={validation_text}, meta={adaptation_target:.2f}%.")
         model_version=validate_model_version(model_version)
         accepted=accepted_submission(conn,cycle["cycle_id"])
         if accepted and accepted[0] == model_version:

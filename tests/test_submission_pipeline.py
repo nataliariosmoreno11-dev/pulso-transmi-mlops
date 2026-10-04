@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 from ml.train_lightgbm import regularize_observations
-from pulso_transmi.submit_current_cycle import build_features, latest_complete_cycle_accuracy, local_autoregressive_predictions, multivariate_autoregressive_predictions, observation_demand, recent_meta_adjustments, validate_predictions
+from pulso_transmi.submit_current_cycle import build_features, latest_complete_cycle_accuracy, local_autoregressive_predictions, multivariate_autoregressive_predictions, observation_demand, recent_meta_adjustments, use_multivariate_fallback, validate_predictions
 
 
 def test_observation_demand_accepts_stream_v1_and_v2():
@@ -117,6 +117,14 @@ class _Connection:
 
 def test_latest_complete_cycle_accuracy_reads_metric():
     assert latest_complete_cycle_accuracy(_Connection([(78.68,)])) == pytest.approx(78.68)
+
+
+def test_var_remains_active_until_cycle_and_challenger_clear_target():
+    weak={"metrics":{"lightgbm":{"accuracy_mean_12_stations":61.18}}}
+    strong={"metrics":{"lightgbm":{"accuracy_mean_12_stations":81.0}}}
+    assert use_multivariate_fallback(82.0,weak)
+    assert use_multivariate_fallback(70.0,strong)
+    assert not use_multivariate_fallback(82.0,strong)
 
 
 def test_recent_adjustment_uses_stable_rolling_bias_ratio():
