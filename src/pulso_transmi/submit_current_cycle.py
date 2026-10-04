@@ -240,6 +240,18 @@ def recent_meta_adjustments(conn,cutoff,minimum_rows=24,lookback_rows=96,lag_adv
         adjustments[station]=(use_lag,use_lag4,factor)
     return adjustments
 
+def latest_complete_cycle_accuracy(conn):
+    """Accuracy WAPE global del ciclo completo más reciente."""
+    with conn.cursor() as db:
+        db.execute("""select 100*(1-sum(abs(p.demanda_predicha-o.demanda))::float8/
+          nullif(sum(o.demanda),0)) accuracy
+          from public.predicciones_api p join public.observaciones o
+          on o.id_estacion=p.id_estacion and o.instante=p.instante_objetivo
+          group by p.id_ciclo having count(*)=48
+          order by max(p.instante_objetivo) desc limit 1""")
+        row=db.fetchone()
+    return float(row[0]) if row and row[0] is not None else None
+
 def validate_predictions(cycle,predictions):
     expected={(str(t["station_id"]),pd.Timestamp(t["target_at"])) for t in cycle["targets"]}
     actual={(p["station_id"],pd.Timestamp(p["target_at"])) for p in predictions}
@@ -305,6 +317,15 @@ def main():
             lag4_stations=sorted(station for station,(_,use_lag4,_) in adjustments.items() if use_lag4)
             model_version += "-meta-v2"
             print(f"Selector reciente aplicado a {len(adjustments)} estaciones; persistencia: {fallback_stations}; mezcla periódica: {lag4_stations}.")
+        latest_accuracy=latest_complete_cycle_accuracy(conn)
+        if latest_accuracy is not None and latest_accuracy < 65.0:
+            # Tras un colapso confirmado, el patrón histórico deja de ser una
+            # referencia fiable. Una tendencia corta reaccionó mejor en la
+            # validación walk-forward del nuevo régimen y solo usa datos al corte.
+            output=np.clip(2*frame["lag_available"].astype(float).to_numpy()
+                           - frame["lag_15m"].astype(float).to_numpy(),0,None)
+            model_version += "-trend-v1"
+            print(f"Modo de drift severo: tendencia causal activa; último ciclo={latest_accuracy:.2f}%.")
         model_version=validate_model_version(model_version)
         predictions=[{"station_id":str(r.station_id),"target_at":r.target_at.isoformat(),"horizon_minutes":int(r.horizon_minutes),"value":round(float(v),3)}
                      for r,v in zip(frame.itertuples(index=False),output,strict=True)]

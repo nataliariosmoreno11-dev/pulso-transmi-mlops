@@ -1,6 +1,6 @@
 import pandas as pd
 import pytest
-from pulso_transmi.submit_current_cycle import build_features, observation_demand, recent_meta_adjustments, validate_predictions
+from pulso_transmi.submit_current_cycle import build_features, latest_complete_cycle_accuracy, observation_demand, recent_meta_adjustments, validate_predictions
 
 
 def test_observation_demand_accepts_stream_v1_and_v2():
@@ -66,6 +66,8 @@ class _Cursor:
         pass
     def fetchall(self):
         return self.rows
+    def fetchone(self):
+        return self.rows[0] if self.rows else None
 
 
 class _Connection:
@@ -73,6 +75,10 @@ class _Connection:
         self.rows = rows
     def cursor(self):
         return _Cursor(self.rows)
+
+
+def test_latest_complete_cycle_accuracy_reads_metric():
+    assert latest_complete_cycle_accuracy(_Connection([(78.68,)])) == pytest.approx(78.68)
 
 
 def test_recent_adjustment_uses_stable_rolling_bias_ratio():
