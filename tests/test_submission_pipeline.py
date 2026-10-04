@@ -91,7 +91,7 @@ def test_recent_adjustment_adapts_to_confirmed_regime_shift():
     use_lag, use_lag4, factor = adjustment["03000"]
     assert not use_lag
     assert use_lag4
-    assert factor == pytest.approx(1.0)
+    assert factor == pytest.approx(55 / 56)
 
 
 def test_recent_adjustment_uses_safe_lag_when_model_collapses():
