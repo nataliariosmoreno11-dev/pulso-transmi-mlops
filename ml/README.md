@@ -47,3 +47,21 @@ El torneo publica `validacion-var-<run_id>` con el reporte. Un candidato solo
 queda habilitado para revisión si tiene al menos seis ciclos completos de
 evaluación, supera al VAR v2 en 0,5 puntos, alcanza 80% de media y no empeora
 el mínimo ni aumenta los ciclos bajo 80%. El reporte no cambia producción.
+
+## Experimentos de mejora y riesgo bajo 70%
+
+`python -m ml.evaluate_var_ensemble` compara 33 estrategias: VAR, modelos por
+estación, mezclas, patrones periódicos, calibración de sesgo y selección causal
+por estación. Se puede reproducir con `--input archivo.csv`. El torneo guarda
+`var-ensemble-evaluation.json` junto con la validación de VAR.
+
+El selector usa solo el bloque anterior; el día posterior queda para evaluación.
+Las estrategias adaptativas solo utilizan errores cuyos targets ya estaban
+disponibles al pronosticar. Una estrategia necesita al menos doce ciclos
+completos de evaluación, 80% de media, mejora de 0,5 puntos frente a VAR y no
+empeorar el mínimo ni el número de ciclos bajo 70% para quedar habilitada para
+revisión. El reporte no cambia el modelo productivo.
+
+Inspeccionar repetidamente un bloque reservado convierte esos resultados en
+exploratorios: se requiere una evaluación posterior independiente antes de
+publicar una variante elegida después de ver sus resultados.

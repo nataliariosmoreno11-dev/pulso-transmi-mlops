@@ -30,12 +30,16 @@ jobs:
         run: python -m pulso_transmi.log_mlflow
       - name: Evaluar VAR v2 y candidatos sin cambiar producción
         run: python -m ml.backtest_var
+      - name: Comparar mezclas y riesgo de accuracy inferior al 70%
+        run: python -m ml.evaluate_var_ensemble
       - name: Guardar validación temporal de VAR
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: validacion-var-${{ github.run_id }}
-          path: artifacts/var-backtest.latest.json
+          path: |
+            artifacts/var-backtest.latest.json
+            artifacts/var-ensemble-evaluation.json
           if-no-files-found: warn
       - name: Guardar reporte del torneo
         if: always()
